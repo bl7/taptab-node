@@ -1,6 +1,6 @@
 # TapTab Restaurant POS Backend
 
-A modern Node.js backend built with Express, TypeScript, Prisma, and PostgreSQL for the TapTab restaurant POS system. This backend handles all restaurant operations including menu management, order processing, and analytics.
+A modern Node.js backend built with Express, TypeScript, and PostgreSQL for the TapTab restaurant POS system. This backend handles all restaurant operations including menu management, order processing, and analytics.
 
 ## Features
 
@@ -8,7 +8,7 @@ A modern Node.js backend built with Express, TypeScript, Prisma, and PostgreSQL 
 - **Menu Management**: Categories and menu items with full CRUD operations
 - **Order Processing**: Complete order lifecycle management
 - **Role-based Access Control**: SUPER_ADMIN, TENANT_ADMIN, MANAGER, CASHIER, WAITER, KITCHEN, READONLY
-- **Database**: PostgreSQL with Prisma for schema management
+- **Database**: PostgreSQL with raw SQL queries
 - **Security**: JWT token verification, input validation, error handling
 - **Logging**: Structured logging with Winston and daily rotation
 - **TypeScript**: Full TypeScript support with strict type checking
@@ -19,7 +19,7 @@ A modern Node.js backend built with Express, TypeScript, Prisma, and PostgreSQL 
 - **Framework**: Express.js
 - **Language**: TypeScript
 - **Database**: PostgreSQL
-- **ORM**: Prisma (for schema management)
+- **Database**: PostgreSQL with pg library
 - **Authentication**: JWT token verification
 - **Validation**: express-validator
 - **Security**: helmet, cors, rate limiting
@@ -65,11 +65,8 @@ A modern Node.js backend built with Express, TypeScript, Prisma, and PostgreSQL 
 
 4. **Set up the database**
    ```bash
-   # Generate Prisma client
-   npm run prisma:generate
-   
-   # Run database migrations
-   npm run prisma:migrate
+   # Run database migrations manually using the SQL files in the migrations/ directory
+   # Example: psql your_database_name -f migrations/add_user_order_source.sql
    ```
 
 5. **Start the development server**
@@ -82,9 +79,7 @@ A modern Node.js backend built with Express, TypeScript, Prisma, and PostgreSQL 
 - `npm run dev` - Start development server with hot reload
 - `npm run build` - Build the project for production
 - `npm start` - Start the production server
-- `npm run prisma:generate` - Generate Prisma client
-- `npm run prisma:migrate` - Run database migrations
-- `npm run prisma:studio` - Open Prisma Studio
+
 - `npm test` - Run tests
 - `npm run lint` - Run ESLint
 - `npm run lint:fix` - Fix ESLint issues

@@ -7,10 +7,6 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate deploy",
-    "prisma:studio": "prisma studio",
-    "prisma:seed": "ts-node src/prisma/seed.ts",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -19,7 +15,6 @@
     "type-check": "tsc --noEmit",
     "docker:build": "docker build -t taptab-backend .",
     "docker:run": "docker run -p 3000:3000 taptab-backend",
-    "postinstall": "npm run prisma:generate",
     "build:debug": "echo 'Building...' && tsc && echo 'Build complete' && ls -la dist/"
   },
   "keywords": [
@@ -28,14 +23,12 @@
     "nodejs",
     "express",
     "typescript",
-    "prisma",
     "postgresql",
     "redis"
   ],
   "author": "TapTab Team",
   "license": "MIT",
   "dependencies": {
-    "@prisma/client": "^5.7.1",
     "@sentry/node": "^7.95.0",
     "aws-sdk": "^2.1531.0",
     "axios": "^1.11.0",
@@ -88,7 +81,6 @@
     "@typescript-eslint/parser": "^6.14.0",
     "eslint": "^8.55.0",
     "jest": "^29.7.0",
-    "prisma": "^5.7.1",
     "supertest": "^6.3.3",
     "ts-jest": "^29.1.1",
     "ts-node-dev": "^2.0.0",
