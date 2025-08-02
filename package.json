@@ -8,7 +8,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "prisma:seed": "ts-node src/prisma/seed.ts",
     "test": "jest",
@@ -18,7 +18,8 @@
     "lint:fix": "eslint src/**/*.ts --fix",
     "type-check": "tsc --noEmit",
     "docker:build": "docker build -t taptab-backend .",
-    "docker:run": "docker run -p 3000:3000 taptab-backend"
+    "docker:run": "docker run -p 3000:3000 taptab-backend",
+    "postinstall": "npm run prisma:generate"
   },
   "keywords": [
     "restaurant",
