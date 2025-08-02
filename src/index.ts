@@ -10,6 +10,7 @@ import morgan from 'morgan';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
+import { createServer } from 'http';
 
 import * as Sentry from '@sentry/node';
 import prometheusMiddleware from 'express-prometheus-middleware';
@@ -28,9 +29,17 @@ import tableRoutes from './routes/v1/tables';
 import analyticsRoutes from './routes/v1/analytics';
 import settingsRoutes from './routes/v1/settings';
 import tenantRoutes from './routes/v1/tenants';
+import deliverooRoutes from './routes/v1/deliveroo';
+import deliverooConfigRoutes from './routes/v1/deliveroo-config';
+
+// Import public routes for QR ordering
+import publicMenuRoutes from './routes/v1/public-menu';
+import publicTableRoutes from './routes/v1/public-tables';
+import publicOrderRoutes from './routes/v1/public-orders';
 
 // Import services
 import { logger } from './utils/logger';
+import { socketManager } from './utils/socket';
 
 // Debug: Check if env vars are loaded
 console.log('DATABASE_URL exists:', !!process.env['DATABASE_URL']);
@@ -147,6 +156,23 @@ app.get('/health', async (req, res) => {
 
 // API Routes with versioning
 const apiVersion = process.env['API_VERSION'] || 'v1';
+
+// Debug endpoint to see connected WebSocket users
+app.get('/api/debug/connected-users', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      connectedUsers: socketManager.getConnectedUsers()
+    }
+  });
+});
+
+// Public routes for QR ordering (no authentication required)
+app.use(`/api/${apiVersion}/public/menu`, publicMenuRoutes);
+app.use(`/api/${apiVersion}/public/tables`, publicTableRoutes);
+app.use(`/api/${apiVersion}/public/orders`, publicOrderRoutes);
+
+// Authenticated routes for admin/staff use (with authentication)
 app.use(`/api/${apiVersion}/auth`, authRoutes);
 app.use(`/api/${apiVersion}/menu`, authenticateToken, tenantMiddleware, menuRoutes);
 app.use(`/api/${apiVersion}/orders`, authenticateToken, tenantMiddleware, orderRoutes);
@@ -154,6 +180,8 @@ app.use(`/api/${apiVersion}/tables`, authenticateToken, tenantMiddleware, tableR
 app.use(`/api/${apiVersion}/analytics`, authenticateToken, tenantMiddleware, analyticsRoutes);
 app.use(`/api/${apiVersion}/settings`, authenticateToken, tenantMiddleware, settingsRoutes);
 app.use(`/api/${apiVersion}/tenants`, authenticateToken, tenantRoutes);
+app.use(`/api/${apiVersion}/deliveroo`, deliverooRoutes);
+app.use(`/api/${apiVersion}/deliveroo-config`, deliverooConfigRoutes);
 
 // Error handling middleware
 app.use(notFoundHandler);
@@ -189,11 +217,18 @@ const startServer = async () => {
     await executeQuery('SELECT 1');
     logger.info('Database connected successfully');
     
-    app.listen(PORT, () => {
+    // Create HTTP server
+    const server = createServer(app);
+    
+    // Initialize WebSocket support
+    socketManager.initialize(server);
+    
+    server.listen(PORT, () => {
       logger.info(`🚀 TapTab Restaurant POS Backend running on port ${PORT}`);
       logger.info(`📊 Environment: ${process.env['NODE_ENV'] || 'development'}`);
       logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
       logger.info(`📈 Metrics: http://localhost:${PORT}/metrics`);
+      logger.info(`🔌 WebSocket: ws://localhost:${PORT}`);
     });
   } catch (error) {
     logger.error('Failed to start server:', error);

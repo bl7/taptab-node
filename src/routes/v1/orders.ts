@@ -18,7 +18,11 @@ router.get('/', async (req: Request, res: Response) => {
     let query = `
       SELECT o.*, 
              oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi.notes,
-             mi.name as menu_item_name
+             mi.name as menu_item_name,
+             o."orderSource", o."sourceDetails", o."createdByUserId", o."createdByUserName",
+             o."isDelivery", o."deliveryAddress", o."deliveryPlatform", o."deliveryOrderId",
+             o."deliverooOrderId", o."deliverooReference", o."customerAddress", 
+             o."estimatedDeliveryTime", o."specialInstructions"
       FROM orders o
       LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
       LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
@@ -52,9 +56,22 @@ router.get('/', async (req: Request, res: Response) => {
           total: parseFloat(row.finalAmount.toString()),
           status: row.status.toLowerCase(),
           waiterId: row.createdById,
-          waiterName: 'Unknown',
+          waiterName: row.createdByUserName || row.sourceDetails || 'Unknown',
           createdAt: row.createdAt,
-          updatedAt: row.updatedAt
+          updatedAt: row.updatedAt,
+          orderSource: row.orderSource,
+          sourceDetails: row.sourceDetails,
+          createdByUserId: row.createdByUserId,
+          createdByUserName: row.createdByUserName,
+          isDelivery: row.isDelivery,
+          deliveryAddress: row.deliveryAddress,
+          deliveryPlatform: row.deliveryPlatform,
+          deliveryOrderId: row.deliveryOrderId,
+          deliverooOrderId: row.deliverooOrderId,
+          deliverooReference: row.deliverooReference,
+          customerAddress: row.customerAddress,
+          estimatedDeliveryTime: row.estimatedDeliveryTime,
+          specialInstructions: row.specialInstructions
         });
       }
 
@@ -84,7 +101,7 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER', 'TENANT_ADMIN']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { tableId, items } = req.body;
+    const { tableId, items, orderSource } = req.body;
 
     if (!tableId || !items || !Array.isArray(items) || items.length === 0) {
       return sendError(res, 'VALIDATION_ERROR', 'TableId and items array are required', 400);
@@ -130,10 +147,41 @@ router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER',
     // Generate order number
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
+    // Determine order source
+    let finalOrderSource = orderSource || 'WAITER';
+    let sourceDetails = '';
+
+    // Get user info for source details
+    const user = (req as any).user;
+    if (user) {
+      const userName = `${user.firstName || ''} ${user.lastName || ''}`.trim();
+      if (userName) {
+        sourceDetails = userName;
+      }
+    }
+
+    // Map order source to appropriate value
+    switch (finalOrderSource.toUpperCase()) {
+      case 'QR':
+        finalOrderSource = 'QR_ORDERING';
+        break;
+      case 'WAITER':
+        finalOrderSource = 'WAITER_ORDERING';
+        break;
+      case 'CASHIER':
+        finalOrderSource = 'CASHIER_ORDERING';
+        break;
+      case 'MANAGER':
+        finalOrderSource = 'MANAGER_ORDERING';
+        break;
+      default:
+        finalOrderSource = 'WAITER_ORDERING';
+    }
+
     // Create order
     const orderResult = await executeQuery(
-      `INSERT INTO orders (id, "orderNumber", "tableNumber", "totalAmount", "taxAmount", "discountAmount", "finalAmount", "tenantId", "createdById", status, "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      `INSERT INTO orders (id, "orderNumber", "tableNumber", "totalAmount", "taxAmount", "discountAmount", "finalAmount", "tenantId", "createdById", status, "orderSource", "sourceDetails", "customerName", "customerPhone", "createdByUserId", "createdByUserName", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING *`,
       [
         `order_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         orderNumber,
@@ -143,8 +191,14 @@ router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER',
         0,
         total,
         tenantId,
-        (req as any).user?.id || null,
+        user?.id || null,
         'PENDING',
+        finalOrderSource,
+        sourceDetails,
+        null, // customerName - not collected for waiter orders
+        null, // customerPhone - not collected for waiter orders
+        user?.id || null,
+        sourceDetails,
         new Date(),
         new Date()
       ]
@@ -187,12 +241,16 @@ router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER',
       total: parseFloat(order.finalAmount.toString()),
       status: order.status.toLowerCase(),
       waiterId: order.createdById,
-      waiterName: 'Unknown',
+      waiterName: sourceDetails || 'Unknown',
+      orderSource: order.orderSource,
+      sourceDetails: order.sourceDetails,
+      customerName: null, // Not collected for waiter orders
+      customerPhone: null, // Not collected for waiter orders
       createdAt: order.createdAt,
       updatedAt: order.updatedAt
     };
 
-    logger.info(`Order created: ${order.orderNumber}`);
+    logger.info(`Order created: ${order.orderNumber} by ${sourceDetails} via ${finalOrderSource}`);
     sendSuccess(res, { order: formattedOrder }, 'Order created successfully', 201);
   } catch (error) {
     logger.error('Create order error:', error);

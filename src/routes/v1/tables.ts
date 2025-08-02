@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { logger } from '../../utils/logger';
-import { getTenantId } from '../../middleware/tenant';
+import { getTenantId, getPublicTenantId } from '../../middleware/tenant';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { sendSuccess, sendError } from '../../utils/response';
 import { findMany, createWithCheck, updateWithCheck, deleteWithCheck } from '../../utils/database';
@@ -9,8 +9,8 @@ const router = Router();
 
 // ==================== TABLES MANAGEMENT ====================
 
-// GET /api/tables - Get all tables
-router.get('/', async (req: Request, res: Response) => {
+// GET /api/tables - Get all tables (AUTHENTICATED)
+router.get('/', authenticateToken, async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
 
@@ -154,7 +154,7 @@ router.delete('/:id', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER']
   }
 });
 
-// PUT /api/tables/:id/status - Update table status only
+// PUT /api/tables/:id/status - Update table status
 router.put('/:id/status', authenticateToken, requireRole(['WAITER', 'MANAGER', 'TENANT_ADMIN']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
@@ -169,7 +169,7 @@ router.put('/:id/status', authenticateToken, requireRole(['WAITER', 'MANAGER', '
       return sendError(res, 'VALIDATION_ERROR', 'Status is required', 400);
     }
 
-    // Validate status values
+    // Validate status
     const validStatuses = ['available', 'occupied', 'reserved', 'cleaning'];
     if (!validStatuses.includes(status)) {
       return sendError(res, 'VALIDATION_ERROR', 'Invalid status value', 400);
@@ -193,7 +193,7 @@ router.put('/:id/status', authenticateToken, requireRole(['WAITER', 'MANAGER', '
       updatedAt: table.updatedAt
     };
 
-    logger.info(`Table status updated: ${table.number} -> ${status}`);
+    logger.info(`Table status updated: ${table.number} - ${status}`);
     sendSuccess(res, { table: formattedTable }, 'Table status updated successfully');
   } catch (error) {
     logger.error('Update table status error:', error);

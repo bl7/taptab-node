@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { logger } from '../../utils/logger';
-import { getTenantId } from '../../middleware/tenant';
+import { getTenantId, getPublicTenantId } from '../../middleware/tenant';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { sendSuccess, sendError } from '../../utils/response';
 import { findMany, findById, createWithCheck, updateWithCheck, deleteWithCheck, executeQuery } from '../../utils/database';
@@ -9,8 +9,8 @@ const router = Router();
 
 // ==================== MENU ITEMS ====================
 
-// GET /api/menu/items - Get all menu items
-router.get('/items', async (req: Request, res: Response) => {
+// GET /api/menu/items - Get all menu items (AUTHENTICATED)
+router.get('/items', authenticateToken, async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { category } = req.query;
@@ -19,7 +19,7 @@ router.get('/items', async (req: Request, res: Response) => {
       SELECT mi.*, c.name as category_name 
       FROM "menuItems" mi 
       LEFT JOIN categories c ON mi."categoryId" = c.id 
-      WHERE mi."tenantId" = $1
+      WHERE mi."tenantId" = $1 AND mi."isActive" = true
     `;
     const values: any[] = [tenantId];
 
@@ -211,8 +211,8 @@ router.delete('/items/:id', authenticateToken, requireRole(['TENANT_ADMIN', 'MAN
 
 // ==================== CATEGORIES ====================
 
-// GET /api/menu/categories - Get all menu categories
-router.get('/categories', async (req: Request, res: Response) => {
+// GET /api/menu/categories - Get all menu categories (AUTHENTICATED)
+router.get('/categories', authenticateToken, async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
 

@@ -71,4 +71,56 @@ export const getTenantId = (req: TenantRequest): string => {
 // Helper function to get tenant from request
 export const getTenant = (req: TenantRequest): any => {
   return req.tenant!;
+};
+
+// New function for public endpoints - detect tenant from header or query
+export const getPublicTenantId = async (req: Request): Promise<string> => {
+  try {
+    // Try header first, then query parameter
+    const tenantSlug = (req.headers['x-tenant-slug'] as string) || (req.query.tenant as string);
+    
+    if (!tenantSlug) {
+      throw new Error('Tenant identifier required (X-Tenant-Slug header or tenant query parameter)');
+    }
+
+    // Get tenant by slug
+    const tenantResult = await executeQuery(
+      'SELECT id FROM tenants WHERE slug = $1 AND "isActive" = true',
+      [tenantSlug]
+    );
+
+    if (tenantResult.rows.length === 0) {
+      throw new Error('Restaurant not found or inactive');
+    }
+
+    return tenantResult.rows[0].id;
+  } catch (error) {
+    logger.error('Public tenant detection error:', error);
+    throw error;
+  }
+};
+
+// Helper function to get public tenant info
+export const getPublicTenant = async (req: Request): Promise<any> => {
+  try {
+    const tenantSlug = (req.headers['x-tenant-slug'] as string) || (req.query.tenant as string);
+    
+    if (!tenantSlug) {
+      throw new Error('Tenant identifier required');
+    }
+
+    const tenantResult = await executeQuery(
+      'SELECT * FROM tenants WHERE slug = $1 AND "isActive" = true',
+      [tenantSlug]
+    );
+
+    if (tenantResult.rows.length === 0) {
+      throw new Error('Restaurant not found or inactive');
+    }
+
+    return tenantResult.rows[0];
+  } catch (error) {
+    logger.error('Public tenant info error:', error);
+    throw error;
+  }
 }; 
