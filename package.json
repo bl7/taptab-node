@@ -1,6 +1,6 @@
 {
   "name": "taptab-restaurant-pos-backend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "TapTab Restaurant POS System - Node.js Backend",
   "main": "dist/index.js",
   "scripts": {
@@ -15,7 +15,8 @@
     "type-check": "tsc --noEmit",
     "docker:build": "docker build -t taptab-backend .",
     "docker:run": "docker run -p 3000:3000 taptab-backend",
-    "build:debug": "echo 'Building...' && tsc && echo 'Build complete' && ls -la dist/"
+    "build:debug": "echo 'Building...' && tsc && echo 'Build complete' && ls -la dist/",
+    "render:build": "npm install && npm run build"
   },
   "keywords": [
     "restaurant",
