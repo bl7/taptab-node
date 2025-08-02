@@ -19,7 +19,8 @@
     "type-check": "tsc --noEmit",
     "docker:build": "docker build -t taptab-backend .",
     "docker:run": "docker run -p 3000:3000 taptab-backend",
-    "postinstall": "npm run prisma:generate"
+    "postinstall": "npm run prisma:generate",
+    "build:debug": "echo 'Building...' && tsc && echo 'Build complete' && ls -la dist/"
   },
   "keywords": [
     "restaurant",
