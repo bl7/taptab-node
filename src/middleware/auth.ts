@@ -3,16 +3,7 @@ import jwt from 'jsonwebtoken';
 import { logger } from '../utils/logger';
 import { executeQuery } from '../utils/database';
 
-// Define UserRole enum locally since we're not using Prisma
-enum UserRole {
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  TENANT_ADMIN = 'TENANT_ADMIN',
-  MANAGER = 'MANAGER',
-  CASHIER = 'CASHIER',
-  WAITER = 'WAITER',
-  KITCHEN = 'KITCHEN',
-  READONLY = 'READONLY'
-}
+
 
 export interface AuthRequest extends Request {
   user?: {
@@ -56,7 +47,7 @@ export const authenticateToken = async (
       decoded = jwt.verify(token, process.env['JWT_SECRET']!) as any;
       console.log('✅ Token verification successful');
       console.log('Decoded token payload:', JSON.stringify(decoded, null, 2));
-    } catch (jwtError) {
+    } catch (jwtError: any) {
       console.log('❌ JWT verification failed:', jwtError.message);
       console.log('JWT Error details:', jwtError);
       throw jwtError;

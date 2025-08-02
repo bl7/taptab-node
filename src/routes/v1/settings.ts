@@ -55,8 +55,6 @@ router.get('/', authenticateToken, requireRole(['TENANT_ADMIN']), async (req: Re
 
       sendSuccess(res, settings);
     }
-
-    sendSuccess(res, settings);
   } catch (error) {
     logger.error('Get settings error:', error);
     sendError(res, 'FETCH_ERROR', 'Failed to fetch settings');
@@ -123,16 +121,34 @@ router.put('/', authenticateToken, requireRole(['TENANT_ADMIN']), async (req: Re
         updatedAt: new Date()
       };
 
-      const newSettings = await createWithCheck('settings', settingsData, 'restaurantName', restaurantName, tenantId);
+      const newSettings = await executeQuery(
+        `INSERT INTO settings (id, "restaurantName", address, phone, email, "taxRate", currency, timezone, "tenantId", "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *`,
+        [
+          settingsData.id,
+          settingsData.restaurantName,
+          settingsData.address,
+          settingsData.phone,
+          settingsData.email,
+          settingsData.taxRate,
+          settingsData.currency,
+          settingsData.timezone,
+          settingsData.tenantId,
+          settingsData.createdAt,
+          settingsData.updatedAt
+        ]
+      );
+
+      const newSettingsData = newSettings.rows[0];
 
       const settings = {
-        restaurantName: newSettings.restaurantName,
-        address: newSettings.address || '',
-        phone: newSettings.phone || '',
-        email: newSettings.email || '',
-        taxRate: parseFloat(newSettings.taxRate.toString()),
-        currency: newSettings.currency,
-        timezone: newSettings.timezone
+        restaurantName: newSettingsData.restaurantName,
+        address: newSettingsData.address || '',
+        phone: newSettingsData.phone || '',
+        email: newSettingsData.email || '',
+        taxRate: parseFloat(newSettingsData.taxRate.toString()),
+        currency: newSettingsData.currency,
+        timezone: newSettingsData.timezone
       };
 
       logger.info(`Settings created for tenant: ${tenantId}`);

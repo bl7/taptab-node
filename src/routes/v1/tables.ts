@@ -2,8 +2,8 @@ import { Router, Request, Response } from 'express';
 import { logger } from '../../utils/logger';
 import { getTenantId } from '../../middleware/tenant';
 import { authenticateToken, requireRole } from '../../middleware/auth';
-import { sendSuccess, sendError, sendNotFound } from '../../utils/response';
-import { findMany, findById, createWithCheck, updateWithCheck, deleteWithCheck, executeQuery } from '../../utils/database';
+import { sendSuccess, sendError } from '../../utils/response';
+import { findMany, createWithCheck, updateWithCheck, deleteWithCheck } from '../../utils/database';
 
 const router = Router();
 

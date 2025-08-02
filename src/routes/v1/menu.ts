@@ -2,8 +2,7 @@ import { Router, Request, Response } from 'express';
 import { logger } from '../../utils/logger';
 import { getTenantId } from '../../middleware/tenant';
 import { authenticateToken, requireRole } from '../../middleware/auth';
-import { validateRequest } from '../../middleware/validation';
-import { sendSuccess, sendError, sendNotFound } from '../../utils/response';
+import { sendSuccess, sendError } from '../../utils/response';
 import { findMany, findById, createWithCheck, updateWithCheck, deleteWithCheck, executeQuery } from '../../utils/database';
 
 const router = Router();
@@ -135,7 +134,7 @@ router.put('/items/:id', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGE
       return sendError(res, 'VALIDATION_ERROR', 'ID is required', 400);
     }
 
-    // Check if item exists
+    // Check if item exists and get it
     const existingItem = await findById('menuItems', id, tenantId);
 
     // Verify category if being changed

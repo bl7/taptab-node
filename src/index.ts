@@ -33,19 +33,19 @@ import tenantRoutes from './routes/v1/tenants';
 import { logger } from './utils/logger';
 
 // Debug: Check if env vars are loaded
-console.log('DATABASE_URL exists:', !!process.env.DATABASE_URL);
-console.log('JWT_SECRET exists:', !!process.env.JWT_SECRET);
-console.log('PORT:', process.env.PORT || 5050);
+console.log('DATABASE_URL exists:', !!process.env['DATABASE_URL']);
+console.log('JWT_SECRET exists:', !!process.env['JWT_SECRET']);
+console.log('PORT:', process.env['PORT'] || 5050);
 
 // Import database utilities
 import { executeQuery } from './utils/database';
 import pool from './utils/api';
 
 // Initialize Sentry
-if (process.env.SENTRY_DSN) {
+if (process.env['SENTRY_DSN']) {
   Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    environment: process.env.NODE_ENV,
+    dsn: process.env['SENTRY_DSN'],
+    environment: process.env['NODE_ENV'] || 'development',
     integrations: [
       new Sentry.Integrations.Http({ tracing: true }),
       new Sentry.Integrations.Express({ app: express() }),
@@ -56,7 +56,7 @@ if (process.env.SENTRY_DSN) {
 
 const app = express();
 
-const PORT = process.env.PORT || 5050;
+const PORT = process.env['PORT'] || 5050;
 
 
 
@@ -71,8 +71,8 @@ app.use(prometheusMiddleware({
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'),
+  windowMs: parseInt(process.env['RATE_LIMIT_WINDOW_MS'] || '900000'), // 15 minutes
+  max: parseInt(process.env['RATE_LIMIT_MAX_REQUESTS'] || '100'),
   message: {
     success: false,
     error: {
@@ -103,8 +103,8 @@ app.use(helmet({
 }));
 app.use(compression());
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: process.env.CORS_CREDENTIALS === 'true',
+  origin: process.env['CORS_ORIGIN'] || 'http://localhost:3000',
+  credentials: process.env['CORS_CREDENTIALS'] === 'true',
 }));
 app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 app.use(express.json({ limit: '10mb' }));
@@ -126,8 +126,8 @@ app.get('/health', async (req, res) => {
         status: 'OK',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        environment: process.env.NODE_ENV,
-        version: process.env.npm_package_version || '1.0.0',
+        environment: process.env['NODE_ENV'] || 'development',
+        version: process.env['npm_package_version'] || '1.0.0',
       },
       message: 'Service is healthy',
       timestamp: new Date().toISOString(),
@@ -146,7 +146,7 @@ app.get('/health', async (req, res) => {
 });
 
 // API Routes with versioning
-const apiVersion = process.env.API_VERSION || 'v1';
+const apiVersion = process.env['API_VERSION'] || 'v1';
 app.use(`/api/${apiVersion}/auth`, authRoutes);
 app.use(`/api/${apiVersion}/menu`, authenticateToken, tenantMiddleware, menuRoutes);
 app.use(`/api/${apiVersion}/orders`, authenticateToken, tenantMiddleware, orderRoutes);
@@ -184,14 +184,14 @@ const startServer = async () => {
   try {
     // Test database connection
     console.log('Testing database connection...');
-    console.log('DATABASE_URL:', process.env.DATABASE_URL?.substring(0, 20) + '...');
+    console.log('DATABASE_URL:', process.env['DATABASE_URL']?.substring(0, 20) + '...');
     
     await executeQuery('SELECT 1');
     logger.info('Database connected successfully');
     
     app.listen(PORT, () => {
       logger.info(`🚀 TapTab Restaurant POS Backend running on port ${PORT}`);
-      logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
+      logger.info(`📊 Environment: ${process.env['NODE_ENV'] || 'development'}`);
       logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
       logger.info(`📈 Metrics: http://localhost:${PORT}/metrics`);
     });

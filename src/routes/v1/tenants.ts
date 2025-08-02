@@ -1,11 +1,10 @@
 import { Router } from 'express';
-import { prisma } from '../../index';
 import { logger } from '../../utils/logger';
 
 const router = Router();
 
 // Get all tenants
-router.get('/', async (req, res) => {
+router.get('/', async (req: any, res: any) => {
   try {
     res.json({
       success: true,

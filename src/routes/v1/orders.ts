@@ -3,7 +3,7 @@ import { logger } from '../../utils/logger';
 import { getTenantId } from '../../middleware/tenant';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { sendSuccess, sendError, sendNotFound } from '../../utils/response';
-import { findMany, findById, createWithCheck, updateWithCheck, deleteWithCheck, executeQuery } from '../../utils/database';
+import { executeQuery } from '../../utils/database';
 
 const router = Router();
 
@@ -91,27 +91,30 @@ router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER',
     }
 
     // Verify table exists
-    const table = await prisma.table.findFirst({
-      where: { number: tableId, tenantId }
-    });
+    const tableResult = await executeQuery(
+      'SELECT * FROM tables WHERE number = $1 AND "tenantId" = $2',
+      [tableId, tenantId]
+    );
 
-    if (!table) {
+    if (tableResult.rows.length === 0) {
       return sendError(res, 'TABLE_NOT_FOUND', 'Table not found', 400);
     }
 
     // Calculate total and create order items
     let total = 0;
-    const orderItems = [];
+    const orderItems: any[] = [];
 
     for (const item of items) {
-      const menuItem = await prisma.menuItem.findFirst({
-        where: { id: item.menuItemId, tenantId }
-      });
+      const menuItemResult = await executeQuery(
+        'SELECT * FROM "menuItems" WHERE id = $1 AND "tenantId" = $2',
+        [item.menuItemId, tenantId]
+      );
 
-      if (!menuItem) {
+      if (menuItemResult.rows.length === 0) {
         return sendError(res, 'MENU_ITEM_NOT_FOUND', `Menu item ${item.menuItemId} not found`, 400);
       }
 
+      const menuItem = menuItemResult.rows[0];
       const itemTotal = parseFloat(menuItem.price.toString()) * item.quantity;
       total += itemTotal;
 
@@ -127,33 +130,46 @@ router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER',
     // Generate order number
     const orderNumber = `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 
-    const order = await prisma.order.create({
-      data: {
+    // Create order
+    const orderResult = await executeQuery(
+      `INSERT INTO orders (id, "orderNumber", "tableNumber", "totalAmount", "taxAmount", "discountAmount", "finalAmount", "tenantId", "createdById", status, "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING *`,
+      [
+        `order_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         orderNumber,
-        tableNumber: tableId,
-        totalAmount: total,
-        taxAmount: 0,
-        discountAmount: 0,
-        finalAmount: total,
+        tableId,
+        total,
+        0,
+        0,
+        total,
         tenantId,
-        createdById: req.user?.id || null,
-        orderItems: {
-          create: orderItems
-        }
-      },
-      include: {
-        orderItems: {
-          include: {
-            menuItem: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
-        }
-      }
-    });
+        (req as any).user?.id || null,
+        'PENDING',
+        new Date(),
+        new Date()
+      ]
+    );
+
+    const order = orderResult.rows[0];
+
+    // Create order items
+    for (const item of orderItems) {
+      await executeQuery(
+        `INSERT INTO "orderItems" (id, "orderId", "menuItemId", quantity, "unitPrice", "totalPrice", notes, "createdAt", "updatedAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          order.id,
+          item.menuItemId,
+          item.quantity,
+          item.unitPrice,
+          item.totalPrice,
+          item.notes,
+          new Date(),
+          new Date()
+        ]
+      );
+    }
 
     const formattedOrder = {
       id: order.id,
@@ -206,33 +222,22 @@ router.put('/:id', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER
     }
 
     // Check if order exists
-    const existingOrder = await prisma.order.findFirst({
-      where: { id, tenantId }
-    });
+    const existingOrderResult = await executeQuery(
+      'SELECT * FROM orders WHERE id = $1 AND "tenantId" = $2',
+      [id, tenantId]
+    );
 
-    if (!existingOrder) {
-      return sendNotFound(res, 'Order not found');
+    if (existingOrderResult.rows.length === 0) {
+      return sendError(res, 'NOT_FOUND', 'Order not found', 404);
     }
 
-    const order = await prisma.order.update({
-      where: { id },
-      data: { 
-        status: status.toUpperCase(),
-        updatedAt: new Date()
-      },
-      include: {
-        orderItems: {
-          include: {
-            menuItem: {
-              select: {
-                id: true,
-                name: true
-              }
-            }
-          }
-        }
-      }
-    });
+    // Update order status
+    const orderResult = await executeQuery(
+      'UPDATE orders SET status = $1, "updatedAt" = $2 WHERE id = $3 RETURNING *',
+      [status.toUpperCase(), new Date(), id]
+    );
+
+    const order = orderResult.rows[0];
 
     const formattedOrder = {
       id: order.id,
@@ -285,31 +290,26 @@ router.put('/:id/items/:itemId', authenticateToken, requireRole(['KITCHEN', 'MAN
     }
 
     // Check if order and item exist
-    const orderItem = await prisma.orderItem.findFirst({
-      where: { 
-        id: itemId,
-        orderId: id
-      },
-      include: {
-        order: true,
-        menuItem: {
-          select: {
-            id: true,
-            name: true
-          }
-        }
-      }
-    });
+    const orderItemResult = await executeQuery(
+      `SELECT oi.*, o."tenantId" as order_tenant_id, mi.name as menu_item_name
+       FROM "orderItems" oi 
+       LEFT JOIN orders o ON oi."orderId" = o.id
+       LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+       WHERE oi.id = $1 AND oi."orderId" = $2`,
+      [itemId, id]
+    );
 
-    if (!orderItem || orderItem.order.tenantId !== tenantId) {
-      return sendNotFound(res, 'Order item not found');
+    if (orderItemResult.rows.length === 0 || orderItemResult.rows[0].order_tenant_id !== tenantId) {
+      return sendError(res, 'NOT_FOUND', 'Order item not found', 404);
     }
 
+    const orderItem = orderItemResult.rows[0];
+    
     // Since item status is not in current schema, we'll just return the item with updated status
     const formattedItem = {
       id: orderItem.id,
       menuItemId: orderItem.menuItemId,
-      menuItemName: orderItem.menuItem.name,
+      menuItemName: orderItem.menu_item_name,
       quantity: orderItem.quantity,
       price: parseFloat(orderItem.unitPrice.toString()),
       notes: orderItem.notes,
@@ -335,22 +335,20 @@ router.delete('/:id', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANA
     }
 
     // Check if order exists
-    const existingOrder = await prisma.order.findFirst({
-      where: { id, tenantId }
-    });
+    const existingOrderResult = await executeQuery(
+      'SELECT * FROM orders WHERE id = $1 AND "tenantId" = $2',
+      [id, tenantId]
+    );
 
-    if (!existingOrder) {
-      return sendNotFound(res, 'Order not found');
+    if (existingOrderResult.rows.length === 0) {
+      return sendError(res, 'NOT_FOUND', 'Order not found', 404);
     }
 
     // Update order status to cancelled instead of deleting
-    await prisma.order.update({
-      where: { id },
-      data: { 
-        status: 'CANCELLED',
-        updatedAt: new Date()
-      }
-    });
+    await executeQuery(
+      'UPDATE orders SET status = $1, "updatedAt" = $2 WHERE id = $3',
+      ['CANCELLED', new Date(), id]
+    );
 
     logger.info(`Order cancelled: ${id}`);
     sendSuccess(res, { success: true }, 'Order cancelled successfully');
