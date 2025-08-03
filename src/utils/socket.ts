@@ -83,13 +83,10 @@ class SocketManager {
       timestamp: new Date().toISOString()
     };
 
-    // Emit to print room (admin and kitchen only)
-    this.io.to(`print_${tenantId}`).emit('newOrder', notificationData);
-
-    // Also emit to all authenticated users for debugging
+    // Emit to all users (same as test notification)
     this.io.emit('newOrder', notificationData);
 
-    logger.info(`New order notification sent to print room for tenant ${tenantId}`);
+    logger.info(`New order notification sent for tenant ${tenantId}`);
     logger.info(`Notification data:`, notificationData);
     
     // Log connected users for debugging
