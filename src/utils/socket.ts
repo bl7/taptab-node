@@ -12,10 +12,15 @@ class SocketManager {
   private io: SocketIOServer | null = null;
   private authenticatedSockets: Map<string, AuthenticatedSocket> = new Map();
 
+  // Getter for io to allow external access for debugging
+  get ioInstance() {
+    return this.io;
+  }
+
   initialize(server: HTTPServer) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: process.env['CORS_ORIGIN'] || 'http://localhost:3000',
+        origin: true, // Allow all origins
         methods: ['GET', 'POST'],
         credentials: true
       }
@@ -72,14 +77,24 @@ class SocketManager {
       return;
     }
 
-    // Emit to print room (admin and kitchen only)
-    this.io.to(`print_${tenantId}`).emit('newOrder', {
+    const notificationData = {
       type: 'PRINT_RECEIPT',
       order: orderData,
       timestamp: new Date().toISOString()
-    });
+    };
+
+    // Emit to print room (admin and kitchen only)
+    this.io.to(`print_${tenantId}`).emit('newOrder', notificationData);
+
+    // Also emit to all authenticated users for debugging
+    this.io.emit('newOrder', notificationData);
 
     logger.info(`New order notification sent to print room for tenant ${tenantId}`);
+    logger.info(`Notification data:`, notificationData);
+    
+    // Log connected users for debugging
+    const connectedUsers = this.getConnectedUsers();
+    logger.info(`Connected users:`, connectedUsers);
   }
 
   // Get connected users for debugging

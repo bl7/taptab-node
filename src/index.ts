@@ -184,6 +184,40 @@ app.get('/api/debug/connected-users', (req, res) => {
   });
 });
 
+// Debug endpoint to test WebSocket notifications
+app.post('/api/debug/test-notification', (req, res) => {
+  try {
+    const { tenantId, message } = req.body;
+    
+    if (!tenantId) {
+      return res.status(400).json({
+        success: false,
+        error: 'tenantId is required'
+      });
+    }
+
+    const testData = {
+      type: 'TEST_NOTIFICATION',
+      message: message || 'Test notification from server',
+      timestamp: new Date().toISOString()
+    };
+
+    // Emit to all users for testing
+    socketManager.ioInstance?.emit('newOrder', testData);
+    
+    res.json({
+      success: true,
+      message: 'Test notification sent',
+      data: testData
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: (error as Error).message
+    });
+  }
+});
+
 // Public routes for QR ordering (no authentication required)
 app.use(`/api/${apiVersion}/public/menu`, publicMenuRoutes);
 app.use(`/api/${apiVersion}/public/tables`, publicTableRoutes);
