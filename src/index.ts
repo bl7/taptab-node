@@ -109,10 +109,29 @@ app.use(helmet({
   },
 }));
 app.use(compression());
-app.use(cors({
-  origin: process.env['CORS_ORIGIN'] || 'http://localhost:3000',
-  credentials: process.env['CORS_CREDENTIALS'] === 'true',
-}));
+// Open CORS configuration - allows all origins
+const corsOptions = {
+  origin: true, // Allow all origins
+  credentials: true, // Allow credentials
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Origin',
+    'X-Requested-With',
+    'Content-Type',
+    'Accept',
+    'Authorization',
+    'X-API-Key',
+    'X-Tenant-ID'
+  ],
+  exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
+  maxAge: 86400 // 24 hours
+};
+
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+
 app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
