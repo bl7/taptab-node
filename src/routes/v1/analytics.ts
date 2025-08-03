@@ -135,16 +135,14 @@ router.get('/orders', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER']
       statusCounts[row.status.toLowerCase()] = parseInt(row.count);
     });
 
-    const pendingOrders = statusCounts.pending || 0;
-    const preparingOrders = statusCounts.preparing || 0;
-    const readyOrders = statusCounts.ready || 0;
-    const completedOrders = statusCounts.delivered || 0;
+    const activeOrders = statusCounts.active || 0;
+    const paidOrders = statusCounts.paid || 0;
+    const cancelledOrders = statusCounts.cancelled || 0;
 
     sendSuccess(res, {
-      pendingOrders,
-      preparingOrders,
-      readyOrders,
-      completedOrders
+      activeOrders,
+      paidOrders,
+      cancelledOrders
     });
   } catch (error) {
     logger.error('Get order analytics error:', error);

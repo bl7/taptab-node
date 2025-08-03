@@ -4,13 +4,14 @@ import { getTenantId } from '../../middleware/tenant';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { sendSuccess, sendError, sendNotFound } from '../../utils/response';
 import { executeQuery } from '../../utils/database';
+import { socketManager } from '../../utils/socket';
 
 const router = Router();
 
 // ==================== ORDERS MANAGEMENT ====================
 
 // GET /api/orders - Get all orders
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER', 'TENANT_ADMIN']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { status, tableId } = req.query;
@@ -21,7 +22,7 @@ router.get('/', async (req: Request, res: Response) => {
              mi.name as menu_item_name,
              o."orderSource", o."sourceDetails", o."createdByUserId", o."createdByUserName",
              o."isDelivery", o."deliveryAddress", o."deliveryPlatform", o."deliveryOrderId",
-             o."deliverooOrderId", o."deliverooReference", o."customerAddress", 
+             o."customerAddress", 
              o."estimatedDeliveryTime", o."specialInstructions"
       FROM orders o
       LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
@@ -63,15 +64,17 @@ router.get('/', async (req: Request, res: Response) => {
           sourceDetails: row.sourceDetails,
           createdByUserId: row.createdByUserId,
           createdByUserName: row.createdByUserName,
+          customerName: row.customerName,
+          customerPhone: row.customerPhone,
+          customerEmail: row.customerEmail,
+          specialInstructions: row.specialInstructions,
           isDelivery: row.isDelivery,
           deliveryAddress: row.deliveryAddress,
           deliveryPlatform: row.deliveryPlatform,
           deliveryOrderId: row.deliveryOrderId,
-          deliverooOrderId: row.deliverooOrderId,
-          deliverooReference: row.deliverooReference,
-          customerAddress: row.customerAddress,
           estimatedDeliveryTime: row.estimatedDeliveryTime,
-          specialInstructions: row.specialInstructions
+          taxAmount: parseFloat(row.taxAmount.toString()),
+          discountAmount: parseFloat(row.discountAmount.toString())
         });
       }
 
@@ -83,7 +86,7 @@ router.get('/', async (req: Request, res: Response) => {
           quantity: row.quantity,
           price: parseFloat(row.unitPrice.toString()),
           notes: row.notes,
-          status: 'pending'
+          status: 'active'
         });
       }
     });
@@ -101,20 +104,37 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER', 'TENANT_ADMIN']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { tableId, items, orderSource } = req.body;
+    const { 
+      tableId, 
+      items, 
+      orderSource,
+      customerName,
+      customerPhone,
+      customerEmail,
+      specialInstructions,
+      isDelivery = false,
+      deliveryAddress,
+      deliveryPlatform,
+      deliveryOrderId,
+      estimatedDeliveryTime,
+      priority = 'normal',
+      paymentMethod,
+      taxAmount = 0,
+      discountAmount = 0
+    } = req.body;
 
     if (!tableId || !items || !Array.isArray(items) || items.length === 0) {
       return sendError(res, 'VALIDATION_ERROR', 'TableId and items array are required', 400);
     }
 
-    // Verify table exists
+    // Verify table exists (check both number and id)
     const tableResult = await executeQuery(
-      'SELECT * FROM tables WHERE number = $1 AND "tenantId" = $2',
+      'SELECT * FROM tables WHERE (number = $1 OR id = $1) AND "tenantId" = $2',
       [tableId, tenantId]
     );
 
     if (tableResult.rows.length === 0) {
-      return sendError(res, 'TABLE_NOT_FOUND', 'Table not found', 400);
+      return sendError(res, 'TABLE_NOT_FOUND', `Table ${tableId} not found`, 400);
     }
 
     // Calculate total and create order items
@@ -178,27 +198,43 @@ router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER',
         finalOrderSource = 'WAITER_ORDERING';
     }
 
+    // Calculate final amount with tax and discount
+    const finalAmount = total + taxAmount - discountAmount;
+
     // Create order
     const orderResult = await executeQuery(
-      `INSERT INTO orders (id, "orderNumber", "tableNumber", "totalAmount", "taxAmount", "discountAmount", "finalAmount", "tenantId", "createdById", status, "orderSource", "sourceDetails", "customerName", "customerPhone", "createdByUserId", "createdByUserName", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18) RETURNING *`,
+      `INSERT INTO orders (
+        id, "orderNumber", "tableNumber", "totalAmount", "taxAmount", "discountAmount", "finalAmount", 
+        "tenantId", "createdById", status, "orderSource", "sourceDetails", 
+        "customerName", "customerPhone", "notes", "isDelivery", "deliveryAddress", "deliveryPlatform", 
+        "deliveryOrderId", "createdByUserId", "createdByUserName", "customerAddress", 
+        "estimatedDeliveryTime", "specialInstructions", "createdAt", "updatedAt"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26) RETURNING *`,
       [
         `order_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         orderNumber,
         tableId,
         total,
-        0,
-        0,
-        total,
+        taxAmount,
+        discountAmount,
+        finalAmount,
         tenantId,
         user?.id || null,
         'PENDING',
         finalOrderSource,
         sourceDetails,
-        null, // customerName - not collected for waiter orders
-        null, // customerPhone - not collected for waiter orders
+        customerName || null,
+        customerPhone || null,
+        specialInstructions || null,
+        isDelivery,
+        deliveryAddress || null,
+        deliveryPlatform || null,
+        deliveryOrderId || null,
         user?.id || null,
         sourceDetails,
+        deliveryAddress || null, // customerAddress
+        estimatedDeliveryTime || null,
+        specialInstructions || null,
         new Date(),
         new Date()
       ]
@@ -209,8 +245,8 @@ router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER',
     // Create order items
     for (const item of orderItems) {
       await executeQuery(
-        `INSERT INTO "orderItems" (id, "orderId", "menuItemId", quantity, "unitPrice", "totalPrice", notes, "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        `INSERT INTO "orderItems" (id, "orderId", "menuItemId", quantity, "unitPrice", "totalPrice", notes, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
         [
           `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           order.id,
@@ -219,24 +255,34 @@ router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER',
           item.unitPrice,
           item.totalPrice,
           item.notes,
-          new Date(),
           new Date()
         ]
       );
     }
 
+    // Get order with items for response (same as public orders)
+    const orderWithItemsResult = await executeQuery(`
+      SELECT o.*, oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi."totalPrice", oi.notes,
+             mi.name as menu_item_name
+      FROM orders o
+      LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
+      LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+      WHERE o.id = $1
+    `, [order.id]);
+
+    const orderRows = orderWithItemsResult.rows;
     const formattedOrder = {
       id: order.id,
       tableId: order.tableNumber,
       tableNumber: order.tableNumber,
-      items: order.orderItems.map((item: any) => ({
-        id: item.id,
-        menuItemId: item.menuItemId,
-        menuItemName: item.menuItem.name,
-        quantity: item.quantity,
-        price: parseFloat(item.unitPrice.toString()),
-        notes: item.notes,
-        status: 'pending'
+      items: orderRows.filter(row => row.item_id).map(row => ({
+        id: row.item_id,
+        menuItemId: row.menuItemId,
+        menuItemName: row.menu_item_name,
+        quantity: row.quantity,
+        price: parseFloat(row.unitPrice.toString()),
+        notes: row.notes,
+        status: 'active'
       })),
       total: parseFloat(order.finalAmount.toString()),
       status: order.status.toLowerCase(),
@@ -244,11 +290,29 @@ router.post('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER',
       waiterName: sourceDetails || 'Unknown',
       orderSource: order.orderSource,
       sourceDetails: order.sourceDetails,
-      customerName: null, // Not collected for waiter orders
-      customerPhone: null, // Not collected for waiter orders
+      customerName: order.customerName,
+      customerPhone: order.customerPhone,
+      notes: order.notes,
+      specialInstructions: order.specialInstructions,
+      isDelivery: order.isDelivery,
+      deliveryAddress: order.deliveryAddress,
+      deliveryPlatform: order.deliveryPlatform,
+      deliveryOrderId: order.deliveryOrderId,
+      customerAddress: order.customerAddress,
+      estimatedDeliveryTime: order.estimatedDeliveryTime,
+      taxAmount: parseFloat(order.taxAmount.toString()),
+      discountAmount: parseFloat(order.discountAmount.toString()),
       createdAt: order.createdAt,
       updatedAt: order.updatedAt
     };
+
+    // Emit WebSocket event for admin and kitchen staff
+    try {
+      socketManager.emitNewOrder(tenantId, formattedOrder);
+    } catch (error) {
+      logger.error('Failed to emit WebSocket event:', error);
+      // Don't fail the order creation if WebSocket fails
+    }
 
     logger.info(`Order created: ${order.orderNumber} by ${sourceDetails} via ${finalOrderSource}`);
     sendSuccess(res, { order: formattedOrder }, 'Order created successfully', 201);
@@ -273,10 +337,10 @@ router.put('/:id', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER
       return sendError(res, 'VALIDATION_ERROR', 'Status is required', 400);
     }
 
-    // Validate status values
-    const validStatuses = ['pending', 'preparing', 'ready', 'served', 'cancelled'];
+    // Validate status values - Simplified to 3 states
+    const validStatuses = ['active', 'paid', 'cancelled'];
     if (!validStatuses.includes(status)) {
-      return sendError(res, 'VALIDATION_ERROR', 'Invalid status value', 400);
+      return sendError(res, 'VALIDATION_ERROR', 'Invalid status value. Use: active, paid, cancelled', 400);
     }
 
     // Check if order exists
@@ -297,18 +361,29 @@ router.put('/:id', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER
 
     const order = orderResult.rows[0];
 
+    // Get order with items for response (same as public orders)
+    const orderWithItemsResult = await executeQuery(`
+      SELECT o.*, oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi."totalPrice", oi.notes,
+             mi.name as menu_item_name
+      FROM orders o
+      LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
+      LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+      WHERE o.id = $1
+    `, [order.id]);
+
+    const orderRows = orderWithItemsResult.rows;
     const formattedOrder = {
       id: order.id,
       tableId: order.tableNumber,
       tableNumber: order.tableNumber,
-      items: order.orderItems.map((item: any) => ({
-        id: item.id,
-        menuItemId: item.menuItemId,
-        menuItemName: item.menuItem.name,
-        quantity: item.quantity,
-        price: parseFloat(item.unitPrice.toString()),
-        notes: item.notes,
-        status: 'pending'
+      items: orderRows.filter(row => row.item_id).map(row => ({
+        id: row.item_id,
+        menuItemId: row.menuItemId,
+        menuItemName: row.menu_item_name,
+        quantity: row.quantity,
+        price: parseFloat(row.unitPrice.toString()),
+        notes: row.notes,
+        status: 'active'
       })),
       total: parseFloat(order.finalAmount.toString()),
       status: order.status.toLowerCase(),
@@ -341,10 +416,10 @@ router.put('/:id/items/:itemId', authenticateToken, requireRole(['KITCHEN', 'MAN
       return sendError(res, 'VALIDATION_ERROR', 'Status is required', 400);
     }
 
-    // Validate status values
-    const validStatuses = ['pending', 'preparing', 'ready', 'served'];
+    // Validate status values - Simplified to 3 states
+    const validStatuses = ['active', 'paid', 'cancelled'];
     if (!validStatuses.includes(status)) {
-      return sendError(res, 'VALIDATION_ERROR', 'Invalid status value', 400);
+      return sendError(res, 'VALIDATION_ERROR', 'Invalid status value. Use: active, paid, cancelled', 400);
     }
 
     // Check if order and item exist
@@ -382,14 +457,19 @@ router.put('/:id/items/:itemId', authenticateToken, requireRole(['KITCHEN', 'MAN
   }
 });
 
-// DELETE /api/orders/:id - Cancel order
+// DELETE /api/orders/:id - Cancel order with reason
 router.delete('/:id', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER', 'TENANT_ADMIN']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { id } = req.params;
+    const { reason, cancelledBy } = req.body;
 
     if (!id) {
       return sendError(res, 'VALIDATION_ERROR', 'ID is required', 400);
+    }
+
+    if (!reason) {
+      return sendError(res, 'VALIDATION_ERROR', 'Cancellation reason is required', 400);
     }
 
     // Check if order exists
@@ -402,17 +482,217 @@ router.delete('/:id', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANA
       return sendError(res, 'NOT_FOUND', 'Order not found', 404);
     }
 
-    // Update order status to cancelled instead of deleting
+    const user = (req as any).user;
+
+    // Update order status to cancelled with reason
     await executeQuery(
-      'UPDATE orders SET status = $1, "updatedAt" = $2 WHERE id = $3',
-      ['CANCELLED', new Date(), id]
+      `UPDATE orders SET 
+        status = $1, 
+        "cancellationReason" = $2, 
+        "cancelledByUserId" = $3, 
+        "cancelledAt" = $4, 
+        "updatedAt" = $5 
+       WHERE id = $6`,
+      ['CANCELLED', reason, user?.id || cancelledBy, new Date(), new Date(), id]
     );
 
-    logger.info(`Order cancelled: ${id}`);
+    logger.info(`Order cancelled: ${id} - Reason: ${reason}`);
     sendSuccess(res, { success: true }, 'Order cancelled successfully');
   } catch (error) {
     logger.error('Cancel order error:', error);
     sendError(res, 'DELETE_ERROR', 'Failed to cancel order');
+  }
+});
+
+// PUT /api/orders/:id/pay - Mark order as paid
+router.put('/:id/pay', authenticateToken, requireRole(['CASHIER', 'MANAGER', 'TENANT_ADMIN']), async (req: Request, res: Response) => {
+  try {
+    const tenantId = getTenantId(req);
+    const { id } = req.params;
+    const { paymentMethod, paidBy } = req.body;
+
+    if (!id) {
+      return sendError(res, 'VALIDATION_ERROR', 'ID is required', 400);
+    }
+
+    if (!paymentMethod) {
+      return sendError(res, 'VALIDATION_ERROR', 'Payment method is required', 400);
+    }
+
+    // Check if order exists
+    const existingOrderResult = await executeQuery(
+      'SELECT * FROM orders WHERE id = $1 AND "tenantId" = $2',
+      [id, tenantId]
+    );
+
+    if (existingOrderResult.rows.length === 0) {
+      return sendError(res, 'NOT_FOUND', 'Order not found', 404);
+    }
+
+    const user = (req as any).user;
+
+    // Update order payment status
+    await executeQuery(
+      `UPDATE orders SET 
+        "paymentStatus" = $1, 
+        "paymentMethod" = $2, 
+        "paidByUserId" = $3, 
+        "paidAt" = $4, 
+        "updatedAt" = $5 
+       WHERE id = $6`,
+      ['PAID', paymentMethod, user?.id || paidBy, new Date(), new Date(), id]
+    );
+
+    logger.info(`Order marked as paid: ${id} - Method: ${paymentMethod}`);
+    sendSuccess(res, { success: true }, 'Order marked as paid successfully');
+  } catch (error) {
+    logger.error('Mark order as paid error:', error);
+    sendError(res, 'PAYMENT_ERROR', 'Failed to mark order as paid');
+  }
+});
+
+// PUT /api/orders/:id/modify - Modify order (add/remove items)
+router.put('/:id/modify', authenticateToken, requireRole(['WAITER', 'MANAGER', 'TENANT_ADMIN']), async (req: Request, res: Response) => {
+  try {
+    const tenantId = getTenantId(req);
+    const { id } = req.params;
+    const { action, itemId, quantity, notes, reason } = req.body;
+
+    if (!id) {
+      return sendError(res, 'VALIDATION_ERROR', 'ID is required', 400);
+    }
+
+    if (!action || !itemId) {
+      return sendError(res, 'VALIDATION_ERROR', 'Action and itemId are required', 400);
+    }
+
+    // Check if order exists
+    const existingOrderResult = await executeQuery(
+      'SELECT * FROM orders WHERE id = $1 AND "tenantId" = $2',
+      [id, tenantId]
+    );
+
+    if (existingOrderResult.rows.length === 0) {
+      return sendError(res, 'NOT_FOUND', 'Order not found', 404);
+    }
+
+    // Check if menu item exists
+    const menuItemResult = await executeQuery(
+      'SELECT * FROM "menuItems" WHERE id = $1 AND "tenantId" = $2',
+      [itemId, tenantId]
+    );
+
+    if (menuItemResult.rows.length === 0) {
+      return sendError(res, 'MENU_ITEM_NOT_FOUND', 'Menu item not found', 400);
+    }
+
+    const menuItem = menuItemResult.rows[0];
+    const user = (req as any).user;
+
+    if (action === 'add_item') {
+      // Add new item to order
+      const itemTotal = parseFloat(menuItem.price.toString()) * quantity;
+      
+      await executeQuery(
+        `INSERT INTO "orderItems" (id, "orderId", "menuItemId", quantity, "unitPrice", "totalPrice", notes, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        [
+          `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          id,
+          itemId,
+          quantity,
+          menuItem.price,
+          itemTotal,
+          notes,
+          new Date()
+        ]
+      );
+
+      // Update order total
+      const currentTotal = parseFloat(existingOrderResult.rows[0].totalAmount.toString());
+      const newTotal = currentTotal + itemTotal;
+      
+      await executeQuery(
+        'UPDATE orders SET "totalAmount" = $1, "finalAmount" = $2, "updatedAt" = $3 WHERE id = $4',
+        [newTotal, newTotal, new Date(), id]
+      );
+
+      logger.info(`Item added to order: ${id} - Item: ${menuItem.name}, Quantity: ${quantity}`);
+      sendSuccess(res, { success: true, action: 'add_item', itemId, quantity }, 'Item added to order successfully');
+
+    } else if (action === 'remove_item') {
+      // Find the specific order item to remove
+      const orderItemResult = await executeQuery(
+        'SELECT * FROM "orderItems" WHERE "orderId" = $1 AND "menuItemId" = $2',
+        [id, itemId]
+      );
+
+      if (orderItemResult.rows.length === 0) {
+        return sendError(res, 'ITEM_NOT_FOUND', 'Item not found in order', 400);
+      }
+
+      const orderItem = orderItemResult.rows[0];
+      const itemTotal = parseFloat(orderItem.totalPrice.toString());
+
+      // Remove the item
+      await executeQuery(
+        'DELETE FROM "orderItems" WHERE "orderId" = $1 AND "menuItemId" = $2',
+        [id, itemId]
+      );
+
+      // Update order total
+      const currentTotal = parseFloat(existingOrderResult.rows[0].totalAmount.toString());
+      const newTotal = currentTotal - itemTotal;
+      
+      await executeQuery(
+        'UPDATE orders SET "totalAmount" = $1, "finalAmount" = $2, "updatedAt" = $3 WHERE id = $4',
+        [newTotal, newTotal, new Date(), id]
+      );
+
+      logger.info(`Item removed from order: ${id} - Item: ${menuItem.name}`);
+      sendSuccess(res, { success: true, action: 'remove_item', itemId }, 'Item removed from order successfully');
+
+    } else if (action === 'change_quantity') {
+      // Find the specific order item to update
+      const orderItemResult = await executeQuery(
+        'SELECT * FROM "orderItems" WHERE "orderId" = $1 AND "menuItemId" = $2',
+        [id, itemId]
+      );
+
+      if (orderItemResult.rows.length === 0) {
+        return sendError(res, 'ITEM_NOT_FOUND', 'Item not found in order', 400);
+      }
+
+      const orderItem = orderItemResult.rows[0];
+      const oldTotal = parseFloat(orderItem.totalPrice.toString());
+      const newTotal = parseFloat(menuItem.price.toString()) * quantity;
+
+      // Update the item quantity and total
+      await executeQuery(
+        'UPDATE "orderItems" SET quantity = $1, "totalPrice" = $2, notes = $3 WHERE "orderId" = $4 AND "menuItemId" = $5',
+        [quantity, newTotal, notes, id, itemId]
+      );
+
+      // Update order total
+      const currentTotal = parseFloat(existingOrderResult.rows[0].totalAmount.toString());
+      const totalDifference = newTotal - oldTotal;
+      const newOrderTotal = currentTotal + totalDifference;
+      
+      await executeQuery(
+        'UPDATE orders SET "totalAmount" = $1, "finalAmount" = $2, "updatedAt" = $3 WHERE id = $4',
+        [newOrderTotal, newOrderTotal, new Date(), id]
+      );
+
+      logger.info(`Item quantity changed in order: ${id} - Item: ${menuItem.name}, New Quantity: ${quantity}`);
+      sendSuccess(res, { success: true, action: 'change_quantity', itemId, quantity }, 'Item quantity updated successfully');
+
+    } else {
+      return sendError(res, 'VALIDATION_ERROR', 'Invalid action. Use: add_item, remove_item, change_quantity', 400);
+    }
+
+  } catch (error) {
+    logger.error('Modify order error:', error);
+    sendError(res, 'MODIFY_ERROR', 'Failed to modify order');
   }
 });
 

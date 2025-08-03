@@ -1,0 +1,11 @@
+{
+  "version": "1.0",
+  "apis": [
+    {
+      "identifier": "deliveroo",
+      "source": "@deliveroo/v2.0#dkx619legywisx",
+      "integrity": "sha512-gIFIXECZgIQ6LqpNiWJFnGRVIZm3UHvNlT1ZiCt6J9uoTTpL9K97vazqgq2v8BUJolm1rUl0580uDObfBGMakg==",
+      "installerVersion": "6.1.3"
+    }
+  ]
+}

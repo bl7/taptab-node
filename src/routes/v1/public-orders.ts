@@ -58,7 +58,7 @@ router.post('/', async (req: Request, res: Response) => {
       finalAmount: 0,
       tenantId,
       createdById: null, // Public order, no user
-      status: 'PENDING',
+      status: 'ACTIVE',
       orderSource: 'QR_ORDERING',
       sourceDetails: customerName || 'QR Customer',
       customerName: customerName || 'Walk-in Customer',
