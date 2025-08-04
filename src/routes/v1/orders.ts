@@ -23,10 +23,12 @@ router.get('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER', 
              o."orderSource", o."sourceDetails", o."createdByUserId", o."createdByUserName",
              o."isDelivery", o."deliveryAddress", o."deliveryPlatform", o."deliveryOrderId",
              o."customerAddress", 
-             o."estimatedDeliveryTime", o."specialInstructions"
+             o."estimatedDeliveryTime", o."specialInstructions",
+             u."firstName" as waiter_first_name, u."lastName" as waiter_last_name
       FROM orders o
       LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
       LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+      LEFT JOIN users u ON o."createdById" = u.id
       WHERE o."tenantId" = $1
     `;
     const values: any[] = [tenantId];
@@ -57,7 +59,7 @@ router.get('/', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER', 
           total: parseFloat(row.finalAmount.toString()),
           status: row.status.toLowerCase(),
           waiterId: row.createdById,
-          waiterName: row.createdByUserName || row.sourceDetails || 'Unknown',
+          waiterName: row.createdByUserName || row.sourceDetails || (row.waiter_first_name && row.waiter_last_name ? `${row.waiter_first_name} ${row.waiter_last_name}` : 'Unknown'),
           createdAt: row.createdAt,
           updatedAt: row.updatedAt,
           orderSource: row.orderSource,
@@ -395,10 +397,12 @@ router.put('/:id/modify', authenticateToken, requireRole(['WAITER', 'MANAGER', '
       // Get updated order with items for receipt
       const updatedOrderResult = await executeQuery(`
         SELECT o.*, oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi."totalPrice", oi.notes,
-               mi.name as menu_item_name
+               mi.name as menu_item_name,
+               u."firstName" as waiter_first_name, u."lastName" as waiter_last_name
         FROM orders o
         LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
         LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+        LEFT JOIN users u ON o."createdById" = u.id
         WHERE o.id = $1
       `, [id]);
 
@@ -419,7 +423,7 @@ router.put('/:id/modify', authenticateToken, requireRole(['WAITER', 'MANAGER', '
         total: parseFloat(updatedOrderRows[0].finalAmount.toString()),
         status: updatedOrderRows[0].status.toLowerCase(),
         waiterId: updatedOrderRows[0].createdById,
-        waiterName: 'Unknown',
+        waiterName: updatedOrderRows[0].createdByUserName || updatedOrderRows[0].sourceDetails || (updatedOrderRows[0].waiter_first_name && updatedOrderRows[0].waiter_last_name ? `${updatedOrderRows[0].waiter_first_name} ${updatedOrderRows[0].waiter_last_name}` : 'Unknown'),
         createdAt: updatedOrderRows[0].createdAt,
         updatedAt: updatedOrderRows[0].updatedAt
       };
@@ -483,10 +487,12 @@ router.put('/:id/modify', authenticateToken, requireRole(['WAITER', 'MANAGER', '
       // Get updated order with items for receipt
       const updatedOrderResult = await executeQuery(`
         SELECT o.*, oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi."totalPrice", oi.notes,
-               mi.name as menu_item_name
+               mi.name as menu_item_name,
+               u."firstName" as waiter_first_name, u."lastName" as waiter_last_name
         FROM orders o
         LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
         LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+        LEFT JOIN users u ON o."createdById" = u.id
         WHERE o.id = $1
       `, [id]);
 
@@ -507,7 +513,7 @@ router.put('/:id/modify', authenticateToken, requireRole(['WAITER', 'MANAGER', '
         total: parseFloat(updatedOrderRows[0].finalAmount.toString()),
         status: updatedOrderRows[0].status.toLowerCase(),
         waiterId: updatedOrderRows[0].createdById,
-        waiterName: 'Unknown',
+        waiterName: updatedOrderRows[0].createdByUserName || updatedOrderRows[0].sourceDetails || (updatedOrderRows[0].waiter_first_name && updatedOrderRows[0].waiter_last_name ? `${updatedOrderRows[0].waiter_first_name} ${updatedOrderRows[0].waiter_last_name}` : 'Unknown'),
         createdAt: updatedOrderRows[0].createdAt,
         updatedAt: updatedOrderRows[0].updatedAt
       };
@@ -573,10 +579,12 @@ router.put('/:id/modify', authenticateToken, requireRole(['WAITER', 'MANAGER', '
       // Get updated order with items for receipt
       const updatedOrderResult = await executeQuery(`
         SELECT o.*, oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi."totalPrice", oi.notes,
-               mi.name as menu_item_name
+               mi.name as menu_item_name,
+               u."firstName" as waiter_first_name, u."lastName" as waiter_last_name
         FROM orders o
         LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
         LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+        LEFT JOIN users u ON o."createdById" = u.id
         WHERE o.id = $1
       `, [id]);
 
@@ -597,7 +605,7 @@ router.put('/:id/modify', authenticateToken, requireRole(['WAITER', 'MANAGER', '
         total: parseFloat(updatedOrderRows[0].finalAmount.toString()),
         status: updatedOrderRows[0].status.toLowerCase(),
         waiterId: updatedOrderRows[0].createdById,
-        waiterName: 'Unknown',
+        waiterName: updatedOrderRows[0].createdByUserName || updatedOrderRows[0].sourceDetails || (updatedOrderRows[0].waiter_first_name && updatedOrderRows[0].waiter_last_name ? `${updatedOrderRows[0].waiter_first_name} ${updatedOrderRows[0].waiter_last_name}` : 'Unknown'),
         createdAt: updatedOrderRows[0].createdAt,
         updatedAt: updatedOrderRows[0].updatedAt
       };
@@ -682,10 +690,12 @@ router.put('/:id/pay', authenticateToken, requireRole(['CASHIER', 'MANAGER', 'TE
     // Get order with items for notification
     const orderWithItemsResult = await executeQuery(`
       SELECT o.*, oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi."totalPrice", oi.notes,
-             mi.name as menu_item_name
+             mi.name as menu_item_name,
+             u."firstName" as waiter_first_name, u."lastName" as waiter_last_name
       FROM orders o
       LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
       LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+      LEFT JOIN users u ON o."createdById" = u.id
       WHERE o.id = $1
     `, [id]);
 
@@ -706,7 +716,7 @@ router.put('/:id/pay', authenticateToken, requireRole(['CASHIER', 'MANAGER', 'TE
       total: parseFloat(orderRows[0].finalAmount.toString()),
       status: 'paid',
       waiterId: orderRows[0].createdById,
-      waiterName: 'Unknown',
+      waiterName: orderRows[0].createdByUserName || orderRows[0].sourceDetails || (orderRows[0].waiter_first_name && orderRows[0].waiter_last_name ? `${orderRows[0].waiter_first_name} ${orderRows[0].waiter_last_name}` : 'Unknown'),
       createdAt: orderRows[0].createdAt,
       updatedAt: orderRows[0].updatedAt
     };
@@ -774,10 +784,12 @@ router.put('/:id', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER
     // Get order with items for response (same as public orders)
     const orderWithItemsResult = await executeQuery(`
       SELECT o.*, oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi."totalPrice", oi.notes,
-             mi.name as menu_item_name
+             mi.name as menu_item_name,
+             u."firstName" as waiter_first_name, u."lastName" as waiter_last_name
       FROM orders o
       LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
       LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+      LEFT JOIN users u ON o."createdById" = u.id
       WHERE o.id = $1
     `, [order.id]);
 
@@ -798,7 +810,7 @@ router.put('/:id', authenticateToken, requireRole(['WAITER', 'CASHIER', 'MANAGER
       total: parseFloat(order.finalAmount.toString()),
       status: order.status.toLowerCase(),
       waiterId: order.createdById,
-      waiterName: 'Unknown',
+      waiterName: orderRows[0].createdByUserName || orderRows[0].sourceDetails || (orderRows[0].waiter_first_name && orderRows[0].waiter_last_name ? `${orderRows[0].waiter_first_name} ${orderRows[0].waiter_last_name}` : 'Unknown'),
       createdAt: order.createdAt,
       updatedAt: order.updatedAt
     };
@@ -1124,10 +1136,12 @@ router.put('/:id/modify/batch', authenticateToken, requireRole(['WAITER', 'MANAG
     // Get updated order with items for receipt
     const updatedOrderResult = await executeQuery(`
       SELECT o.*, oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi."totalPrice", oi.notes,
-             mi.name as menu_item_name
+             mi.name as menu_item_name,
+             u."firstName" as waiter_first_name, u."lastName" as waiter_last_name
       FROM orders o
       LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
       LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+      LEFT JOIN users u ON o."createdById" = u.id
       WHERE o.id = $1
     `, [id]);
 
@@ -1148,7 +1162,7 @@ router.put('/:id/modify/batch', authenticateToken, requireRole(['WAITER', 'MANAG
       total: parseFloat(updatedOrderRows[0].finalAmount.toString()),
       status: updatedOrderRows[0].status.toLowerCase(),
       waiterId: updatedOrderRows[0].createdById,
-      waiterName: 'Unknown',
+      waiterName: updatedOrderRows[0].createdByUserName || updatedOrderRows[0].sourceDetails || (updatedOrderRows[0].waiter_first_name && updatedOrderRows[0].waiter_last_name ? `${updatedOrderRows[0].waiter_first_name} ${updatedOrderRows[0].waiter_last_name}` : 'Unknown'),
       createdAt: updatedOrderRows[0].createdAt,
       updatedAt: updatedOrderRows[0].updatedAt
     };
