@@ -77,21 +77,71 @@ class SocketManager {
       return;
     }
 
+    const notificationId = `new_order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
     const notificationData = {
       type: 'PRINT_RECEIPT',
       order: orderData,
+      notificationId: notificationId,
       timestamp: new Date().toISOString()
     };
 
     // Emit to all users (same as test notification)
     this.io.emit('newOrder', notificationData);
 
-    logger.info(`New order notification sent for tenant ${tenantId}`);
+    logger.info(`=== NEW ORDER NOTIFICATION TRIGGERED ===`);
+    logger.info(`Event: newOrder`);
+    logger.info(`Type: PRINT_RECEIPT`);
+    logger.info(`Notification ID: ${notificationId}`);
+    logger.info(`Tenant ID: ${tenantId}`);
+    logger.info(`Order ID: ${orderData.id}`);
     logger.info(`Notification data:`, notificationData);
     
     // Log connected users for debugging
     const connectedUsers = this.getConnectedUsers();
     logger.info(`Connected users:`, connectedUsers);
+  }
+
+  // Emit order modification with complete order and changes for receipt
+  emitOrderModificationReceipt(tenantId: string, orderData: any, changes: {
+    addedItems?: Array<{name: string, quantity: number, price: number, notes?: string}>,
+    removedItems?: Array<{name: string, quantity: number, price: number, reason?: string}>,
+    modifiedItems?: Array<{name: string, oldQuantity: number, newQuantity: number, price: number, notes?: string}>,
+    modificationType: 'add' | 'remove' | 'modify' | 'mixed',
+    modifiedBy: string,
+    reason?: string
+  }) {
+    logger.info('emitOrderModificationReceipt called');
+    
+    if (!this.io) {
+      logger.error('Socket.IO not initialized');
+      return;
+    }
+
+    const notificationId = `modified_order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const notificationData = {
+      type: 'PRINT_MODIFIED_RECEIPT',
+      order: orderData,
+      changes: changes,
+      notificationId: notificationId,
+      timestamp: new Date().toISOString()
+    };
+
+    logger.info('About to emit orderModified event');
+    // Emit to all users
+    this.io.emit('orderModified', notificationData);
+    logger.info('orderModified event emitted');
+
+    logger.info(`=== ORDER MODIFICATION NOTIFICATION TRIGGERED ===`);
+    logger.info(`Event: orderModified`);
+    logger.info(`Type: PRINT_MODIFIED_RECEIPT`);
+    logger.info(`Notification ID: ${notificationId}`);
+    logger.info(`Tenant ID: ${tenantId}`);
+    logger.info(`Order ID: ${orderData.id}`);
+    logger.info(`Modification type: ${changes.modificationType}`);
+    logger.info(`Modified by: ${changes.modifiedBy}`);
+    logger.info(`Notification data:`, notificationData);
   }
 
   // Get connected users for debugging

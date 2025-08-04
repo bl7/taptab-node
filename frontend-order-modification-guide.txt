@@ -1,0 +1,405 @@
+FRONTEND ORDER MODIFICATION NOTIFICATION GUIDE
+==============================================
+
+WebSocket Event: "orderModified"
+Notification Type: "PRINT_MODIFIED_RECEIPT"
+
+==============================================
+
+1. WEBSOCKET LISTENER SETUP
+===========================
+
+```javascript
+// Connect to WebSocket
+const socket = io('ws://localhost:5050');
+
+// Listen for order modification events
+socket.on('orderModified', (data) => {
+  if (data.type === 'PRINT_MODIFIED_RECEIPT') {
+    handleOrderModificationReceipt(data);
+  }
+});
+
+function handleOrderModificationReceipt(data) {
+  const { order, changes, timestamp } = data;
+  
+  // Generate and print receipt
+  generateModificationReceipt(order, changes, timestamp);
+  
+  // Update UI if needed
+  updateOrderInUI(order);
+}
+```
+
+==============================================
+
+2. NOTIFICATION DATA STRUCTURE
+==============================
+
+```javascript
+{
+  type: 'PRINT_MODIFIED_RECEIPT',
+  order: {
+    id: 'order_123',
+    orderNumber: 'ORD-1234567890',
+    tableNumber: '10',
+    total: 28.50,
+    status: 'active',
+    items: [
+      {
+        id: 'item_1',
+        menuItemName: 'Burger',
+        quantity: 2,
+        price: 12.75
+      },
+      {
+        id: 'item_2', 
+        menuItemName: 'French Fries',
+        quantity: 1,
+        price: 2.50
+      }
+    ]
+  },
+  changes: {
+    addedItems: [
+      {
+        name: 'French Fries',
+        quantity: 1,
+        price: 2.50,
+        notes: 'Extra crispy'
+      }
+    ],
+    removedItems: [], // Empty for add operations
+    modifiedItems: [], // Empty for add operations
+    modificationType: 'add', // 'add', 'remove', 'modify'
+    modifiedBy: 'John Smith',
+    reason: 'Customer request'
+  },
+  timestamp: '2025-08-02T13:04:32.387Z'
+}
+```
+
+==============================================
+
+3. RECEIPT GENERATION FUNCTION
+==============================
+
+```javascript
+function generateModificationReceipt(order, changes, timestamp) {
+  const receiptHTML = `
+    <div class="receipt">
+      <div class="receipt-header">
+        <h2>RESTAURANT NAME</h2>
+        <div class="receipt-title">ORDER MODIFICATION RECEIPT</div>
+      </div>
+      
+      <div class="receipt-details">
+        <p><strong>Order:</strong> ${order.orderNumber}</p>
+        <p><strong>Table:</strong> ${order.tableNumber}</p>
+        <p><strong>Modified by:</strong> ${changes.modifiedBy}</p>
+        <p><strong>Date:</strong> ${new Date(timestamp).toLocaleString()}</p>
+        <p><strong>Reason:</strong> ${changes.reason || 'N/A'}</p>
+      </div>
+      
+      <div class="current-items">
+        <h3>CURRENT ORDER ITEMS:</h3>
+        ${order.items.map((item, index) => `
+          <div class="item">
+            ${index + 1}. ${item.menuItemName} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}
+          </div>
+        `).join('')}
+      </div>
+      
+      ${generateChangesSection(changes)}
+      
+      <div class="receipt-footer">
+        <div class="total">Total: $${order.total.toFixed(2)}</div>
+      </div>
+    </div>
+  `;
+  
+  printReceipt(receiptHTML);
+}
+
+function generateChangesSection(changes) {
+  let changesHTML = '';
+  
+  // Added Items
+  if (changes.addedItems && changes.addedItems.length > 0) {
+    changesHTML += '<div class="added-items"><h3>ADDED ITEMS:</h3>';
+    changes.addedItems.forEach(item => {
+      changesHTML += `
+        <div class="item added">
+          + ${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}
+          ${item.notes ? `<div class="notes">Notes: ${item.notes}</div>` : ''}
+        </div>
+      `;
+    });
+    changesHTML += '</div>';
+  }
+  
+  // Removed Items
+  if (changes.removedItems && changes.removedItems.length > 0) {
+    changesHTML += '<div class="removed-items"><h3>REMOVED ITEMS:</h3>';
+    changes.removedItems.forEach(item => {
+      changesHTML += `
+        <div class="item removed">
+          - ${item.name} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}
+          ${item.reason ? `<div class="reason">Reason: ${item.reason}</div>` : ''}
+        </div>
+      `;
+    });
+    changesHTML += '</div>';
+  }
+  
+  // Modified Items
+  if (changes.modifiedItems && changes.modifiedItems.length > 0) {
+    changesHTML += '<div class="modified-items"><h3>MODIFIED ITEMS:</h3>';
+    changes.modifiedItems.forEach(item => {
+      changesHTML += `
+        <div class="item modified">
+          ~ ${item.name}: ${item.oldQuantity} → ${item.newQuantity} - $${(item.price * item.newQuantity).toFixed(2)}
+          ${item.notes ? `<div class="notes">Notes: ${item.notes}</div>` : ''}
+        </div>
+      `;
+    });
+    changesHTML += '</div>';
+  }
+  
+  return changesHTML;
+}
+```
+
+==============================================
+
+4. PRINT FUNCTION
+=================
+
+```javascript
+function printReceipt(htmlContent) {
+  // Create a new window for printing
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Order Modification Receipt</title>
+        <style>
+          body { font-family: monospace; margin: 0; padding: 20px; }
+          .receipt { max-width: 300px; margin: 0 auto; }
+          .receipt-header { text-align: center; margin-bottom: 20px; }
+          .receipt-title { font-weight: bold; margin: 10px 0; }
+          .receipt-details p { margin: 5px 0; }
+          .current-items, .added-items, .removed-items, .modified-items { 
+            margin: 15px 0; 
+          }
+          .item { margin: 5px 0; }
+          .item.added { color: green; }
+          .item.removed { color: red; }
+          .item.modified { color: blue; }
+          .notes, .reason { font-size: 0.9em; margin-left: 10px; }
+          .total { font-weight: bold; text-align: right; margin-top: 20px; }
+          @media print {
+            body { margin: 0; }
+            .receipt { max-width: none; }
+          }
+        </style>
+      </head>
+      <body>
+        ${htmlContent}
+      </body>
+    </html>
+  `);
+  
+  printWindow.document.close();
+  printWindow.focus();
+  
+  // Auto-print after a short delay
+  setTimeout(() => {
+    printWindow.print();
+    printWindow.close();
+  }, 500);
+}
+```
+
+==============================================
+
+5. UI UPDATE FUNCTION
+=====================
+
+```javascript
+function updateOrderInUI(order) {
+  // Update order in your UI components
+  // This depends on your frontend framework
+  
+  // Example for React:
+  setOrders(prevOrders => 
+    prevOrders.map(o => 
+      o.id === order.id ? order : o
+    )
+  );
+  
+  // Example for Vue:
+  // this.orders = this.orders.map(o => 
+  //   o.id === order.id ? order : o
+  // );
+  
+  // Example for vanilla JS:
+  // const orderElement = document.querySelector(`[data-order-id="${order.id}"]`);
+  // if (orderElement) {
+  //   updateOrderElement(orderElement, order);
+  // }
+}
+```
+
+==============================================
+
+6. COMPLETE IMPLEMENTATION EXAMPLE
+==================================
+
+```javascript
+// Complete WebSocket setup and handlers
+class OrderModificationHandler {
+  constructor() {
+    this.socket = io('ws://localhost:5050');
+    this.setupListeners();
+  }
+  
+  setupListeners() {
+    this.socket.on('orderModified', (data) => {
+      if (data.type === 'PRINT_MODIFIED_RECEIPT') {
+        this.handleModificationReceipt(data);
+      }
+    });
+  }
+  
+  handleModificationReceipt(data) {
+    const { order, changes, timestamp } = data;
+    
+    // Generate and print receipt
+    this.generateModificationReceipt(order, changes, timestamp);
+    
+    // Update UI
+    this.updateOrderInUI(order);
+    
+    // Show notification
+    this.showModificationNotification(changes);
+  }
+  
+  generateModificationReceipt(order, changes, timestamp) {
+    // Implementation from section 3
+  }
+  
+  updateOrderInUI(order) {
+    // Implementation from section 5
+  }
+  
+  showModificationNotification(changes) {
+    const message = this.getModificationMessage(changes);
+    // Show toast/notification to user
+    console.log(`Order modified: ${message}`);
+  }
+  
+  getModificationMessage(changes) {
+    switch (changes.modificationType) {
+      case 'add':
+        return `Added ${changes.addedItems.length} item(s)`;
+      case 'remove':
+        return `Removed ${changes.removedItems.length} item(s)`;
+      case 'modify':
+        return `Modified ${changes.modifiedItems.length} item(s)`;
+      default:
+        return 'Order modified';
+    }
+  }
+}
+
+// Initialize
+const orderHandler = new OrderModificationHandler();
+```
+
+==============================================
+
+7. ERROR HANDLING
+=================
+
+```javascript
+socket.on('connect_error', (error) => {
+  console.error('WebSocket connection failed:', error);
+  // Implement reconnection logic
+});
+
+socket.on('disconnect', (reason) => {
+  console.log('WebSocket disconnected:', reason);
+  // Implement reconnection logic
+});
+
+function handleOrderModificationReceipt(data) {
+  try {
+    // Validate data structure
+    if (!data.order || !data.changes) {
+      console.error('Invalid notification data:', data);
+      return;
+    }
+    
+    // Generate receipt
+    generateModificationReceipt(data.order, data.changes, data.timestamp);
+    
+  } catch (error) {
+    console.error('Error handling order modification:', error);
+    // Show user-friendly error message
+  }
+}
+```
+
+==============================================
+
+8. TESTING
+==========
+
+```javascript
+// Test the notification handler
+function testModificationNotification() {
+  const testData = {
+    type: 'PRINT_MODIFIED_RECEIPT',
+    order: {
+      id: 'test_order',
+      orderNumber: 'ORD-TEST-123',
+      tableNumber: '5',
+      total: 25.50,
+      items: [
+        { menuItemName: 'Burger', quantity: 2, price: 12.75 }
+      ]
+    },
+    changes: {
+      addedItems: [
+        { name: 'French Fries', quantity: 1, price: 2.50, notes: 'Extra crispy' }
+      ],
+      modificationType: 'add',
+      modifiedBy: 'Test User',
+      reason: 'Test modification'
+    },
+    timestamp: new Date().toISOString()
+  };
+  
+  handleOrderModificationReceipt(testData);
+}
+
+// Call this function to test
+// testModificationNotification();
+```
+
+==============================================
+
+NOTES
+=====
+
+- The receipt shows the complete current order state
+- Added items are marked with "+" symbol
+- Removed items are marked with "-" symbol  
+- Modified items show quantity changes with "~" symbol
+- All modifications include who made the change and why
+- The receipt automatically prints when received
+- UI updates happen in real-time
+- Error handling ensures graceful degradation
+
+============================================== 
