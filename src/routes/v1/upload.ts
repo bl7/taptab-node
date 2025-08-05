@@ -88,8 +88,8 @@ router.post('/image', upload.single('image'), async (req, res) => {
   } catch (error) {
     console.error('=== UPLOAD ERROR ===');
     console.error('Error details:', error);
-    console.error('Error message:', error.message);
-    console.error('Error stack:', error.stack);
+    console.error('Error message:', (error as Error).message);
+    console.error('Error stack:', (error as Error).stack);
     console.error('====================');
     
     logger.error('Image upload error:', error);
@@ -97,7 +97,7 @@ router.post('/image', upload.single('image'), async (req, res) => {
       success: false,
       error: {
         code: 'UPLOAD_FAILED',
-        message: `Failed to upload image: ${error.message}`,
+        message: `Failed to upload image: ${(error as Error).message}`,
       },
       timestamp: new Date().toISOString(),
     });
@@ -154,7 +154,7 @@ router.post('/images', upload.array('images', 10), async (req, res) => {
       success: false,
       error: {
         code: 'UPLOAD_FAILED',
-        message: 'Failed to upload images',
+        message: `Failed to upload images: ${(error as Error).message}`,
       },
       timestamp: new Date().toISOString(),
     });
@@ -206,7 +206,7 @@ router.delete('/image/:publicId', async (req, res) => {
       success: false,
       error: {
         code: 'DELETE_FAILED',
-        message: 'Failed to delete image',
+        message: `Failed to delete image: ${(error as Error).message}`,
       },
       timestamp: new Date().toISOString(),
     });
