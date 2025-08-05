@@ -30,6 +30,7 @@ import analyticsRoutes from './routes/v1/analytics';
 import settingsRoutes from './routes/v1/settings';
 import tenantRoutes from './routes/v1/tenants';
 import uploadRoutes from './routes/v1/upload';
+import dashboardRoutes from './routes/v1/dashboard';
 
 // Import public routes for QR ordering
 import publicMenuRoutes from './routes/v1/public-menu';
@@ -233,6 +234,7 @@ app.use(`/api/${apiVersion}/analytics`, authenticateToken, tenantMiddleware, ana
 app.use(`/api/${apiVersion}/settings`, authenticateToken, tenantMiddleware, settingsRoutes);
 app.use(`/api/${apiVersion}/tenants`, authenticateToken, tenantRoutes);
 app.use(`/api/${apiVersion}/upload`, authenticateToken, tenantMiddleware, uploadRoutes);
+app.use(`/api/${apiVersion}/dashboard`, authenticateToken, tenantMiddleware, dashboardRoutes);
 
 // Error handling middleware
 app.use(notFoundHandler);
