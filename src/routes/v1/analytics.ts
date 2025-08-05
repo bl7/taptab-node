@@ -19,42 +19,54 @@ router.get('/sales', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER'])
     const start = startDate ? new Date(startDate as string) : new Date(new Date().setDate(new Date().getDate() - 30));
     const end = endDate ? new Date(endDate as string) : new Date();
 
-    // Get orders within date range
-    const ordersQuery = `
-      SELECT o.*, oi."menuItemId", oi.quantity, oi."totalPrice", mi.name as menu_item_name
+    // Get total orders count
+    const totalOrdersQuery = `
+      SELECT COUNT(*) as count
+      FROM orders 
+      WHERE "tenantId" = $1 
+        AND "createdAt" >= $2 
+        AND "createdAt" <= $3
+        AND status != 'cancelled'
+    `;
+    const totalOrdersResult = await executeQuery(totalOrdersQuery, [tenantId, start, end]);
+    const totalOrders = parseInt(totalOrdersResult.rows[0].count);
+
+    // Get total sales
+    const totalSalesQuery = `
+      SELECT COALESCE(SUM("finalAmount"), 0) as total
+      FROM orders 
+      WHERE "tenantId" = $1 
+        AND "createdAt" >= $2 
+        AND "createdAt" <= $3
+        AND status != 'cancelled'
+    `;
+    const totalSalesResult = await executeQuery(totalSalesQuery, [tenantId, start, end]);
+    const totalSales = parseFloat(totalSalesResult.rows[0].total);
+
+    // Get order items for top items analysis
+    const orderItemsQuery = `
+      SELECT oi."menuItemId", oi.quantity, oi."totalPrice", mi.name as menu_item_name
       FROM orders o
-      LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
-      LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+      JOIN "orderItems" oi ON o.id = oi."orderId"
+      JOIN "menuItems" mi ON oi."menuItemId" = mi.id
       WHERE o."tenantId" = $1 
         AND o."createdAt" >= $2 
         AND o."createdAt" <= $3
-        AND o.status != 'CANCELLED'
+        AND o.status != 'cancelled'
     `;
-    const ordersResult = await executeQuery(ordersQuery, [tenantId, start, end]);
-    const orders = ordersResult.rows;
-
-    // Calculate analytics
-    const totalSales = orders.reduce((sum: number, order: any) => {
-      if (order.finalAmount) {
-        return sum + parseFloat(order.finalAmount.toString());
-      }
-      return sum;
-    }, 0);
-    
-    // Count unique orders
-    const uniqueOrders = new Set(orders.map((order: any) => order.id));
-    const totalOrders = uniqueOrders.size;
+    const orderItemsResult = await executeQuery(orderItemsQuery, [tenantId, start, end]);
+    const orderItems = orderItemsResult.rows;
     const averageOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
 
     // Calculate top items
     const itemSales: { [key: string]: { menuItemId: string; name: string; quantity: number; revenue: number } } = {};
     
-    orders.forEach((order: any) => {
-      if (order.menuItemId && order.menu_item_name) {
-        const itemId = order.menuItemId;
-        const itemName = order.menu_item_name;
-        const quantity = order.quantity || 0;
-        const revenue = parseFloat(order.totalPrice?.toString() || '0');
+    orderItems.forEach((item: any) => {
+      if (item.menuItemId && item.menu_item_name) {
+        const itemId = item.menuItemId;
+        const itemName = item.menu_item_name;
+        const quantity = item.quantity || 0;
+        const revenue = parseFloat(item.totalPrice?.toString() || '0');
 
         if (itemSales[itemId]) {
           itemSales[itemId].quantity += quantity;
@@ -75,27 +87,25 @@ router.get('/sales', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER'])
       .slice(0, 10);
 
     // Calculate daily sales
-    const dailySales: { [key: string]: { date: string; sales: number; orders: number } } = {};
-    
-    orders.forEach((order: any) => {
-      if (order.finalAmount) {
-        const date = new Date(order.createdAt).toISOString().split('T')[0];
-        const sales = parseFloat(order.finalAmount.toString());
-
-        if (dailySales[date]) {
-          dailySales[date].sales += sales;
-          dailySales[date].orders += 1;
-        } else {
-          dailySales[date] = {
-            date,
-            sales,
-            orders: 1
-          };
-        }
-      }
-    });
-
-    const dailySalesArray = Object.values(dailySales).sort((a, b) => a.date.localeCompare(b.date));
+    const dailySalesQuery = `
+      SELECT 
+        DATE("createdAt") as date,
+        COALESCE(SUM("finalAmount"), 0) as daily_sales,
+        COUNT(*) as daily_orders
+      FROM orders 
+      WHERE "tenantId" = $1 
+        AND "createdAt" >= $2 
+        AND "createdAt" <= $3
+        AND status != 'cancelled'
+      GROUP BY DATE("createdAt")
+      ORDER BY date ASC
+    `;
+    const dailySalesResult = await executeQuery(dailySalesQuery, [tenantId, start, end]);
+    const dailySalesArray = dailySalesResult.rows.map((row: any) => ({
+      date: row.date,
+      sales: parseFloat(row.daily_sales),
+      orders: parseInt(row.daily_orders)
+    }));
 
     sendSuccess(res, {
       totalSales,
@@ -149,12 +159,10 @@ router.get('/orders', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER']
       statusCounts[row.status.toLowerCase()] = parseInt(row.count);
     });
 
-    const activeOrders = statusCounts.active || 0;
     const paidOrders = statusCounts.paid || 0;
     const cancelledOrders = statusCounts.cancelled || 0;
 
     sendSuccess(res, {
-      activeOrders,
       paidOrders,
       cancelledOrders,
       dateRange: {
@@ -215,9 +223,6 @@ router.get('/comprehensive', authenticateToken, requireRole(['TENANT_ADMIN', 'MA
         COALESCE(SUM("finalAmount"), 0) as total_revenue,
         AVG("finalAmount") as avg_order_value,
         COUNT(DISTINCT "customerPhone") as unique_customers,
-        COUNT(CASE WHEN status = 'PENDING' THEN 1 END) as pending_orders,
-        COUNT(CASE WHEN status = 'PREPARING' THEN 1 END) as preparing_orders,
-        COUNT(CASE WHEN status = 'READY' THEN 1 END) as ready_orders,
         COUNT(CASE WHEN status = 'PAID' THEN 1 END) as paid_orders,
         COUNT(CASE WHEN status = 'CANCELLED' THEN 1 END) as cancelled_orders
       FROM orders 
@@ -262,7 +267,7 @@ router.get('/comprehensive', authenticateToken, requireRole(['TENANT_ADMIN', 'MA
       WHERE o."tenantId" = $1 
         AND o."createdAt" >= $2 
         AND o."createdAt" <= $3
-        AND o.status != 'CANCELLED'
+        AND o.status != 'cancelled'
       GROUP BY mi.id, mi.name
       ORDER BY total_revenue DESC
       LIMIT 10
@@ -287,7 +292,7 @@ router.get('/comprehensive', authenticateToken, requireRole(['TENANT_ADMIN', 'MA
       WHERE "tenantId" = $1 
         AND "createdAt" >= $2 
         AND "createdAt" <= $3
-        AND status != 'CANCELLED'
+        AND status != 'cancelled'
       GROUP BY DATE("createdAt")
       ORDER BY date ASC
     `;
@@ -311,9 +316,6 @@ router.get('/comprehensive', authenticateToken, requireRole(['TENANT_ADMIN', 'MA
         avgOrderValue: parseFloat(analytics.avg_order_value),
         uniqueCustomers: parseInt(analytics.unique_customers),
         orderStatus: {
-          pending: parseInt(analytics.pending_orders),
-          preparing: parseInt(analytics.preparing_orders),
-          ready: parseInt(analytics.ready_orders),
           paid: parseInt(analytics.paid_orders),
           cancelled: parseInt(analytics.cancelled_orders)
         }

@@ -9,30 +9,15 @@ const router = Router();
 
 // ==================== DASHBOARD ====================
 
-// GET /api/dashboard/overview - Get dashboard overview data
+// GET /api/dashboard/overview - Get dashboard overview data (TODAY ONLY)
 router.get('/overview', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER', 'WAITER', 'CASHIER']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { period = 'month' } = req.query;
 
-    // Calculate date range based on period
+    // Dashboard shows TODAY'S data only
     const now = new Date();
-    let startDate: Date;
-    let endDate = now;
-
-    switch (period) {
-      case 'week':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    }
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Start of today
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1); // Start of tomorrow
 
     // Get total orders
     const totalOrdersQuery = `
@@ -40,29 +25,30 @@ router.get('/overview', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER
       FROM orders 
       WHERE "tenantId" = $1 
         AND "createdAt" >= $2 
-        AND "createdAt" <= $3
+        AND "createdAt" < $3
         AND status != 'CANCELLED'
     `;
-    const totalOrdersResult = await executeQuery(totalOrdersQuery, [tenantId, startDate, endDate]);
+    const totalOrdersResult = await executeQuery(totalOrdersQuery, [tenantId, todayStart, todayEnd]);
     const totalOrders = parseInt(totalOrdersResult.rows[0].count);
 
-    // Get previous period for comparison
-    const periodDiff = endDate.getTime() - startDate.getTime();
-    const prevStartDate = new Date(startDate.getTime() - periodDiff);
-    const prevEndDate = new Date(startDate.getTime());
+    // Get yesterday's data for comparison
+    const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+    const yesterdayEnd = new Date(todayStart.getTime());
 
-    const prevOrdersResult = await executeQuery(totalOrdersQuery, [tenantId, prevStartDate, prevEndDate]);
+    const prevOrdersResult = await executeQuery(totalOrdersQuery, [tenantId, yesterdayStart, yesterdayEnd]);
     const prevOrders = parseInt(prevOrdersResult.rows[0].count);
     const orderGrowth = prevOrders > 0 ? ((totalOrders - prevOrders) / prevOrders) * 100 : 0;
 
-    // Get active orders
+    // Get active orders (today only)
     const activeOrdersQuery = `
       SELECT COUNT(*) as count
       FROM orders 
       WHERE "tenantId" = $1 
-        AND status IN ('PENDING', 'PREPARING', 'READY')
+        AND "createdAt" >= $2 
+        AND "createdAt" < $3
+        AND status NOT IN ('PAID', 'CANCELLED')
     `;
-    const activeOrdersResult = await executeQuery(activeOrdersQuery, [tenantId]);
+    const activeOrdersResult = await executeQuery(activeOrdersQuery, [tenantId, todayStart, todayEnd]);
     const activeOrders = parseInt(activeOrdersResult.rows[0].count);
 
     // Get total revenue
@@ -71,13 +57,13 @@ router.get('/overview', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER
       FROM orders 
       WHERE "tenantId" = $1 
         AND "createdAt" >= $2 
-        AND "createdAt" <= $3
+        AND "createdAt" < $3
         AND status != 'CANCELLED'
     `;
-    const totalRevenueResult = await executeQuery(totalRevenueQuery, [tenantId, startDate, endDate]);
+    const totalRevenueResult = await executeQuery(totalRevenueQuery, [tenantId, todayStart, todayEnd]);
     const totalRevenue = parseFloat(totalRevenueResult.rows[0].total);
 
-    const prevRevenueResult = await executeQuery(totalRevenueQuery, [tenantId, prevStartDate, prevEndDate]);
+    const prevRevenueResult = await executeQuery(totalRevenueQuery, [tenantId, yesterdayStart, yesterdayEnd]);
     const prevRevenue = parseFloat(prevRevenueResult.rows[0].total);
     const revenueGrowth = prevRevenue > 0 ? ((totalRevenue - prevRevenue) / prevRevenue) * 100 : 0;
 
@@ -92,49 +78,103 @@ router.get('/overview', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER
       FROM orders 
       WHERE "tenantId" = $1 
         AND "createdAt" >= $2 
-        AND "createdAt" <= $3
+        AND "createdAt" < $3
         AND "customerPhone" IS NOT NULL
         AND status != 'CANCELLED'
     `;
-    const totalCustomersResult = await executeQuery(totalCustomersQuery, [tenantId, startDate, endDate]);
+    const totalCustomersResult = await executeQuery(totalCustomersQuery, [tenantId, todayStart, todayEnd]);
     const totalCustomers = parseInt(totalCustomersResult.rows[0].count);
 
-    // Get new customers this week
-    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    // Get new customers today
     const newCustomersQuery = `
       SELECT COUNT(DISTINCT "customerPhone") as count
       FROM orders 
       WHERE "tenantId" = $1 
         AND "createdAt" >= $2 
+        AND "createdAt" < $3
         AND "customerPhone" IS NOT NULL
         AND status != 'CANCELLED'
     `;
-    const newCustomersResult = await executeQuery(newCustomersQuery, [tenantId, weekAgo]);
+    const newCustomersResult = await executeQuery(newCustomersQuery, [tenantId, todayStart, todayEnd]);
     const newCustomers = parseInt(newCustomersResult.rows[0].count);
+
+    // Get cancelled orders count (today)
+    const cancelledOrdersQuery = `
+      SELECT COUNT(*) as count
+      FROM orders 
+      WHERE "tenantId" = $1 
+        AND "createdAt" >= $2 
+        AND "createdAt" < $3
+        AND status = 'CANCELLED'
+    `;
+    const cancelledOrdersResult = await executeQuery(cancelledOrdersQuery, [tenantId, todayStart, todayEnd]);
+    const cancelledOrders = parseInt(cancelledOrdersResult.rows[0].count);
+
+    // Get payment method breakdown (today)
+    const paymentMethodsQuery = `
+      SELECT 
+        COUNT(CASE WHEN "paymentMethod" = 'CASH' THEN 1 END) as cash_count,
+        COUNT(CASE WHEN "paymentMethod" = 'CARD' THEN 1 END) as card_count,
+        COUNT(CASE WHEN "paymentMethod" = 'QR' THEN 1 END) as qr_count,
+        COUNT(CASE WHEN "paymentMethod" = 'ONLINE' THEN 1 END) as online_count,
+        COALESCE(SUM(CASE WHEN "paymentMethod" = 'CASH' THEN "finalAmount" ELSE 0 END), 0) as cash_revenue,
+        COALESCE(SUM(CASE WHEN "paymentMethod" = 'CARD' THEN "finalAmount" ELSE 0 END), 0) as card_revenue,
+        COALESCE(SUM(CASE WHEN "paymentMethod" = 'QR' THEN "finalAmount" ELSE 0 END), 0) as qr_revenue,
+        COALESCE(SUM(CASE WHEN "paymentMethod" = 'ONLINE' THEN "finalAmount" ELSE 0 END), 0) as online_revenue
+      FROM orders 
+      WHERE "tenantId" = $1 
+        AND "createdAt" >= $2 
+        AND "createdAt" < $3
+        AND status = 'PAID'
+    `;
+    const paymentMethodsResult = await executeQuery(paymentMethodsQuery, [tenantId, todayStart, todayEnd]);
+    const paymentMethods = paymentMethodsResult.rows[0];
 
     sendSuccess(res, {
       summary: {
         totalOrders: {
           value: totalOrders,
           growth: orderGrowth,
-          period: period === 'month' ? 'This month' : `This ${period}`
+          period: 'Today'
         },
         activeOrders: {
           value: activeOrders,
           status: 'Currently processing'
         },
+        cancelledOrders: {
+          value: cancelledOrders,
+          status: 'Cancelled today'
+        },
         totalRevenue: {
           value: totalRevenue,
           growth: revenueGrowth,
-          period: period === 'month' ? 'This month' : `This ${period}`
+          period: 'Today'
         },
         totalCustomers: {
           value: totalCustomers,
-          newThisWeek: newCustomers
+          newToday: newCustomers
         },
         avgOrderValue: {
           value: avgOrderValue,
           growth: avgOrderGrowth
+        },
+        paymentMethods: {
+          cash: {
+            count: parseInt(paymentMethods.cash_count),
+            revenue: parseFloat(paymentMethods.cash_revenue)
+          },
+          card: {
+            count: parseInt(paymentMethods.card_count),
+            revenue: parseFloat(paymentMethods.card_revenue)
+          },
+          qr: {
+            count: parseInt(paymentMethods.qr_count),
+            revenue: parseFloat(paymentMethods.qr_revenue)
+          },
+          online: {
+            count: parseInt(paymentMethods.online_count),
+            revenue: parseFloat(paymentMethods.online_revenue)
+          }
         }
       }
     });
@@ -149,6 +189,11 @@ router.get('/live-orders', authenticateToken, requireRole(['TENANT_ADMIN', 'MANA
   try {
     const tenantId = getTenantId(req);
 
+    // Dashboard shows TODAY'S active orders only
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Start of today
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1); // Start of tomorrow
+
     const liveOrdersQuery = `
       SELECT o.*, 
              oi."menuItemId", oi.quantity, oi."unitPrice", oi.notes,
@@ -159,10 +204,12 @@ router.get('/live-orders', authenticateToken, requireRole(['TENANT_ADMIN', 'MANA
       LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
       LEFT JOIN users u ON o."createdById" = u.id
       WHERE o."tenantId" = $1 
-        AND o.status IN ('PENDING', 'PREPARING', 'READY')
+        AND o."createdAt" >= $2 
+        AND o."createdAt" < $3
+        AND o.status NOT IN ('PAID', 'CANCELLED')
       ORDER BY o."createdAt" ASC
     `;
-    const result = await executeQuery(liveOrdersQuery, [tenantId]);
+    const result = await executeQuery(liveOrdersQuery, [tenantId, todayStart, todayEnd]);
     const rows = result.rows;
 
     // Group orders and their items
@@ -204,14 +251,14 @@ router.get('/live-orders', authenticateToken, requireRole(['TENANT_ADMIN', 'MANA
   }
 });
 
-// GET /api/dashboard/revenue-trend - Get revenue trend data
+// GET /api/dashboard/revenue-trend - Get revenue trend data (LAST 7 DAYS)
 router.get('/revenue-trend', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { days = 7 } = req.query;
 
+    // Dashboard shows last 7 days trend
     const endDate = new Date();
-    const startDate = new Date(endDate.getTime() - parseInt(days as string) * 24 * 60 * 60 * 1000);
+    const startDate = new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const revenueQuery = `
       SELECT 
@@ -256,17 +303,19 @@ router.get('/revenue-trend', authenticateToken, requireRole(['TENANT_ADMIN', 'MA
   }
 });
 
-// GET /api/dashboard/peak-hours - Get peak hours analytics
+// GET /api/dashboard/peak-hours - Get peak hours analytics (LAST 30 DAYS)
 router.get('/peak-hours', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { days = 30 } = req.query;
 
+    // Dashboard shows last 30 days peak hours
     const endDate = new Date();
-    const startDate = new Date(endDate.getTime() - parseInt(days as string) * 24 * 60 * 60 * 1000);
+    const startDate = new Date(endDate.getTime() - 30 * 24 * 60 * 60 * 1000);
 
+    // Get peak hours by day of week for better analysis
     const peakHoursQuery = `
       SELECT 
+        EXTRACT(DOW FROM "createdAt") as day_of_week,
         EXTRACT(HOUR FROM "createdAt") as hour,
         COUNT(*) as order_count,
         COALESCE(SUM("finalAmount"), 0) as revenue
@@ -275,21 +324,65 @@ router.get('/peak-hours', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAG
         AND "createdAt" >= $2 
         AND "createdAt" <= $3
         AND status != 'CANCELLED'
-      GROUP BY EXTRACT(HOUR FROM "createdAt")
-      ORDER BY hour ASC
+      GROUP BY EXTRACT(DOW FROM "createdAt"), EXTRACT(HOUR FROM "createdAt")
+      ORDER BY day_of_week ASC, hour ASC
     `;
     const result = await executeQuery(peakHoursQuery, [tenantId, startDate, endDate]);
     const rows = result.rows;
 
-    // Find max order count for normalization
-    const maxOrders = Math.max(...rows.map((row: any) => parseInt(row.order_count)));
+    // Group by day of week for better analysis
+    const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const peakHoursByDay: any = {};
 
-    const peakHours = rows.map((row: any) => ({
-      hour: parseInt(row.hour),
-      orderCount: parseInt(row.order_count),
-      revenue: parseFloat(row.revenue),
-      activity: maxOrders > 0 ? (parseInt(row.order_count) / maxOrders) * 100 : 0
-    }));
+    // Initialize structure for each day
+    daysOfWeek.forEach((day, index) => {
+      peakHoursByDay[day] = {
+        dayName: day,
+        dayIndex: index,
+        hours: Array.from({ length: 24 }, (_, hour) => ({
+          hour,
+          orderCount: 0,
+          revenue: 0,
+          activity: 0
+        }))
+      };
+    });
+
+    // Fill in the data
+    rows.forEach((row: any) => {
+      const dayIndex = parseInt(row.day_of_week);
+      const hour = parseInt(row.hour);
+      const dayName = daysOfWeek[dayIndex];
+      
+      if (peakHoursByDay[dayName]) {
+        peakHoursByDay[dayName].hours[hour] = {
+          hour,
+          orderCount: parseInt(row.order_count),
+          revenue: parseFloat(row.revenue),
+          activity: 0 // Will calculate below
+        };
+      }
+    });
+
+    // Calculate activity percentage for each day
+    Object.values(peakHoursByDay).forEach((dayData: any) => {
+      const maxOrders = Math.max(...dayData.hours.map((h: any) => h.orderCount));
+      dayData.hours.forEach((hourData: any) => {
+        hourData.activity = maxOrders > 0 ? (hourData.orderCount / maxOrders) * 100 : 0;
+      });
+    });
+
+    // Keep the same response format but with enhanced data
+    const peakHours = Object.values(peakHoursByDay).flatMap((dayData: any) => 
+      dayData.hours.map((hourData: any) => ({
+        hour: hourData.hour,
+        orderCount: hourData.orderCount,
+        revenue: hourData.revenue,
+        activity: hourData.activity,
+        dayName: dayData.dayName,
+        dayIndex: dayData.dayIndex
+      }))
+    );
 
     sendSuccess(res, { peakHours });
   } catch (error) {
@@ -298,29 +391,15 @@ router.get('/peak-hours', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAG
   }
 });
 
-// GET /api/dashboard/top-items - Get top selling items
+// GET /api/dashboard/top-items - Get top selling items (LAST 30 DAYS)
 router.get('/top-items', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { period = 'month', limit = 10 } = req.query;
+    const { limit = 10 } = req.query;
 
-    // Calculate date range
+    // Dashboard shows last 30 days top items
     const now = new Date();
-    let startDate: Date;
-
-    switch (period) {
-      case 'week':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    }
+    const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const topItemsQuery = `
       SELECT 
@@ -363,29 +442,14 @@ router.get('/top-items', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGE
   }
 });
 
-// GET /api/dashboard/staff-performance - Get staff performance
+// GET /api/dashboard/staff-performance - Get staff performance (LAST 30 DAYS)
 router.get('/staff-performance', authenticateToken, requireRole(['TENANT_ADMIN', 'MANAGER']), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
-    const { period = 'month' } = req.query;
 
-    // Calculate date range
+    // Dashboard shows last 30 days staff performance
     const now = new Date();
-    let startDate: Date;
-
-    switch (period) {
-      case 'week':
-        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        break;
-      case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        break;
-      case 'year':
-        startDate = new Date(now.getFullYear(), 0, 1);
-        break;
-      default:
-        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    }
+    const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     const staffQuery = `
       SELECT 
@@ -443,7 +507,6 @@ router.get('/popular-combinations', authenticateToken, requireRole(['TENANT_ADMI
       JOIN "menuItems" mi ON oi."menuItemId" = mi.id
       WHERE o."tenantId" = $1 
         AND o.status != 'CANCELLED'
-        AND o."createdAt" >= NOW() - INTERVAL '30 days'
       GROUP BY o.id
       HAVING COUNT(*) = 2
       ORDER BY combination_count DESC, total_revenue DESC
