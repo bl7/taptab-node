@@ -29,6 +29,7 @@ import tableRoutes from './routes/v1/tables';
 import analyticsRoutes from './routes/v1/analytics';
 import settingsRoutes from './routes/v1/settings';
 import tenantRoutes from './routes/v1/tenants';
+import uploadRoutes from './routes/v1/upload';
 
 // Import public routes for QR ordering
 import publicMenuRoutes from './routes/v1/public-menu';
@@ -229,8 +230,9 @@ app.use(`/api/${apiVersion}/menu`, authenticateToken, tenantMiddleware, menuRout
 app.use(`/api/${apiVersion}/orders`, authenticateToken, tenantMiddleware, orderRoutes);
 app.use(`/api/${apiVersion}/tables`, authenticateToken, tenantMiddleware, tableRoutes);
 app.use(`/api/${apiVersion}/analytics`, authenticateToken, tenantMiddleware, analyticsRoutes);
-  app.use(`/api/${apiVersion}/settings`, authenticateToken, tenantMiddleware, settingsRoutes);
-  app.use(`/api/${apiVersion}/tenants`, authenticateToken, tenantRoutes);
+app.use(`/api/${apiVersion}/settings`, authenticateToken, tenantMiddleware, settingsRoutes);
+app.use(`/api/${apiVersion}/tenants`, authenticateToken, tenantRoutes);
+app.use(`/api/${apiVersion}/upload`, authenticateToken, tenantMiddleware, uploadRoutes);
 
 // Error handling middleware
 app.use(notFoundHandler);
