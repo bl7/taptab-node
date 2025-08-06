@@ -1,0 +1,610 @@
+==================================================================================
+MENU TAGS SYSTEM - FRONTEND IMPLEMENTATION GUIDE
+==================================================================================
+
+This guide explains how to implement the menu tags system in your frontend.
+Tags are dietary labels (like "Gluten-Free", "Dairy-Free") that can be assigned to menu items.
+
+==================================================================================
+1. UNDERSTANDING THE SYSTEM
+==================================================================================
+
+GLOBAL TAGS:
+- 11 predefined dietary tags available to all tenants
+- Each tag has: id, name, description, color
+- Tags are read-only (cannot be created/modified by tenants)
+
+MENU ITEM TAGS:
+- Tenants can assign/remove global tags to their menu items
+- Many-to-many relationship (one menu item can have multiple tags)
+- Assignment is tenant-specific (each tenant manages their own assignments)
+
+==================================================================================
+2. API ENDPOINTS SUMMARY
+==================================================================================
+
+Base URL: /api/v1
+All endpoints require: Authorization: Bearer <token>
+
+TAGS MANAGEMENT:
+- GET /menu-tags              → List all available tags
+- GET /menu-tags/:id          → Get specific tag details
+
+MENU ITEM TAG ASSIGNMENTS:
+- GET /menu-item-tags/:menuItemId        → Get tags for a menu item
+- POST /menu-item-tags/:menuItemId       → Assign tag to menu item
+- DELETE /menu-item-tags/:menuItemId/:tagId → Remove tag from menu item
+
+ENHANCED MENU ITEMS:
+- GET /menu/items             → Now includes tags in response
+- POST /menu/items            → Accept tags array in request
+- PUT /menu/items/:id         → Accept tags array in request
+
+==================================================================================
+3. STEP-BY-STEP IMPLEMENTATION
+==================================================================================
+
+STEP 1: FETCH AVAILABLE TAGS
+----------------------------
+
+When user opens menu item form, fetch all available tags:
+
+REQUEST:
+GET /api/v1/menu-tags
+
+RESPONSE:
+{
+  "success": true,
+  "data": {
+    "tags": [
+      {
+        "id": "tag_gluten_free",
+        "name": "Gluten-Free",
+        "description": "Does not contain gluten or gluten-containing ingredients",
+        "color": "#28a745",
+        "isActive": true,
+        "createdAt": "2025-08-06T04:15:00.000Z",
+        "updatedAt": "2025-08-06T04:15:00.000Z"
+      },
+      {
+        "id": "tag_dairy_free",
+        "name": "Dairy-Free", 
+        "description": "Does not contain milk, cheese, butter, or other dairy products",
+        "color": "#17a2b8",
+        "isActive": true,
+        "createdAt": "2025-08-06T04:15:00.000Z",
+        "updatedAt": "2025-08-06T04:15:00.000Z"
+      }
+      // ... 9 more tags
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 11,
+      "totalPages": 1,
+      "hasNext": false,
+      "hasPrev": false
+    }
+  }
+}
+
+FRONTEND CODE EXAMPLE:
+```javascript
+// Fetch available tags
+const fetchTags = async () => {
+  try {
+    const response = await fetch('/api/v1/menu-tags', {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    const data = await response.json();
+    return data.data.tags;
+  } catch (error) {
+    console.error('Error fetching tags:', error);
+    return [];
+  }
+};
+```
+
+STEP 2: DISPLAY TAGS IN UI
+--------------------------
+
+Create a tag selector component:
+
+HTML STRUCTURE:
+```html
+<div class="tags-section">
+  <label>Dietary Tags (Optional)</label>
+  <div class="tags-grid">
+    <!-- Render each tag as a checkbox or toggle -->
+    <div class="tag-item" v-for="tag in availableTags" :key="tag.id">
+      <input 
+        type="checkbox" 
+        :id="tag.id" 
+        :value="tag.id"
+        v-model="selectedTagIds"
+      />
+      <label 
+        :for="tag.id" 
+        class="tag-label"
+        :style="{ backgroundColor: tag.color }"
+      >
+        {{ tag.name }}
+      </label>
+    </div>
+  </div>
+</div>
+```
+
+CSS STYLING:
+```css
+.tags-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.tag-item {
+  position: relative;
+}
+
+.tag-item input[type="checkbox"] {
+  display: none;
+}
+
+.tag-label {
+  display: block;
+  padding: 8px 12px;
+  border-radius: 20px;
+  color: white;
+  text-align: center;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.tag-item input[type="checkbox"]:checked + .tag-label {
+  opacity: 1;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+```
+
+STEP 3: CREATE MENU ITEM WITH TAGS
+----------------------------------
+
+When creating a new menu item, include selected tags:
+
+REQUEST:
+POST /api/v1/menu/items
+{
+  "name": "Veggie Burger",
+  "description": "Plant-based burger with fresh vegetables",
+  "price": 14.99,
+  "categoryId": "cat_123456",
+  "image": "https://example.com/veggie-burger.jpg",
+  "ingredients": [
+    {
+      "ingredientId": "ing_lettuce_123",
+      "quantity": 50,
+      "unit": "grams"
+    }
+  ],
+  "tags": ["tag_gluten_free", "tag_dairy_free", "tag_nut_free"]
+}
+
+RESPONSE:
+{
+  "success": true,
+  "message": "Menu item created successfully",
+  "data": {
+    "item": {
+      "id": "item_1754450000000_abc12",
+      "name": "Veggie Burger",
+      "description": "Plant-based burger with fresh vegetables", 
+      "price": 14.99,
+      "category": "Main Courses",
+      "categoryId": "cat_123456",
+      "image": "https://example.com/veggie-burger.jpg",
+      "isActive": true,
+      "createdAt": "2025-08-06T04:20:00.000Z",
+      "updatedAt": "2025-08-06T04:20:00.000Z",
+      "ingredients": [...],
+      "allergens": [...],
+      "tags": [
+        {
+          "id": "tag_gluten_free",
+          "name": "Gluten-Free",
+          "description": "Does not contain gluten or gluten-containing ingredients",
+          "color": "#28a745",
+          "assignedAt": "2025-08-06T04:20:00.000Z"
+        },
+        {
+          "id": "tag_dairy_free", 
+          "name": "Dairy-Free",
+          "description": "Does not contain milk, cheese, butter, or other dairy products",
+          "color": "#17a2b8",
+          "assignedAt": "2025-08-06T04:20:00.000Z"
+        },
+        {
+          "id": "tag_nut_free",
+          "name": "Nut-Free", 
+          "description": "Does not contain tree nuts or nut-derived ingredients",
+          "color": "#fd7e14",
+          "assignedAt": "2025-08-06T04:20:00.000Z"
+        }
+      ]
+    }
+  }
+}
+
+FRONTEND CODE EXAMPLE:
+```javascript
+// Create menu item with tags
+const createMenuItem = async (itemData) => {
+  try {
+    const payload = {
+      name: itemData.name,
+      description: itemData.description,
+      price: itemData.price,
+      categoryId: itemData.categoryId,
+      image: itemData.image,
+      ingredients: itemData.ingredients || [],
+      tags: selectedTagIds // Array of tag IDs from UI
+    };
+
+    const response = await fetch('/api/v1/menu/items', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    if (result.success) {
+      console.log('Menu item created with tags:', result.data.item.tags);
+      return result.data.item;
+    } else {
+      throw new Error(result.message || 'Failed to create menu item');
+    }
+  } catch (error) {
+    console.error('Error creating menu item:', error);
+    throw error;
+  }
+};
+```
+
+STEP 4: UPDATE MENU ITEM TAGS
+-----------------------------
+
+When editing a menu item, include current and new tags:
+
+REQUEST:
+PUT /api/v1/menu/items/item_1754450000000_abc12
+{
+  "name": "Updated Veggie Burger",
+  "price": 15.99,
+  "tags": ["tag_gluten_free", "tag_dairy_free"] // Removed "tag_nut_free"
+}
+
+RESPONSE:
+{
+  "success": true,
+  "message": "Menu item updated successfully",
+  "data": {
+    "item": {
+      "id": "item_1754450000000_abc12",
+      "name": "Updated Veggie Burger",
+      "price": 15.99,
+      // ... other fields
+      "tags": [
+        {
+          "id": "tag_gluten_free",
+          "name": "Gluten-Free", 
+          "color": "#28a745",
+          "assignedAt": "2025-08-06T04:25:00.000Z" // New assignment time
+        },
+        {
+          "id": "tag_dairy_free",
+          "name": "Dairy-Free",
+          "color": "#17a2b8", 
+          "assignedAt": "2025-08-06T04:25:00.000Z"
+        }
+        // "tag_nut_free" was removed
+      ]
+    }
+  }
+}
+
+STEP 5: DISPLAY TAGS ON MENU ITEMS
+----------------------------------
+
+When showing menu items, display their assigned tags:
+
+GET /api/v1/menu/items RESPONSE includes tags:
+{
+  "success": true,
+  "data": {
+    "items": [
+      {
+        "id": "item_1754450000000_abc12",
+        "name": "Veggie Burger",
+        "price": 14.99,
+        "ingredients": [...],
+        "allergens": [...],
+        "tags": [
+          {
+            "id": "tag_gluten_free",
+            "name": "Gluten-Free",
+            "color": "#28a745",
+            "assignedAt": "2025-08-06T04:20:00.000Z"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+HTML DISPLAY:
+```html
+<div class="menu-item" v-for="item in menuItems" :key="item.id">
+  <h3>{{ item.name }}</h3>
+  <p>{{ item.description }}</p>
+  <div class="price">${{ item.price }}</div>
+  
+  <!-- Display tags -->
+  <div class="item-tags" v-if="item.tags && item.tags.length > 0">
+    <span 
+      v-for="tag in item.tags" 
+      :key="tag.id"
+      class="tag-badge"
+      :style="{ backgroundColor: tag.color }"
+    >
+      {{ tag.name }}
+    </span>
+  </div>
+</div>
+```
+
+CSS FOR TAG BADGES:
+```css
+.item-tags {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.tag-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  color: white;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+```
+
+==================================================================================
+4. INDIVIDUAL TAG MANAGEMENT (ADVANCED)
+==================================================================================
+
+For more granular control, you can manage tags individually:
+
+ASSIGN SINGLE TAG:
+POST /api/v1/menu-item-tags/item_1754450000000_abc12
+{
+  "tagId": "tag_gluten_free"
+}
+
+REMOVE SINGLE TAG:
+DELETE /api/v1/menu-item-tags/item_1754450000000_abc12/tag_gluten_free
+
+GET TAGS FOR ITEM:
+GET /api/v1/menu-item-tags/item_1754450000000_abc12
+
+==================================================================================
+5. ERROR HANDLING
+==================================================================================
+
+COMMON ERRORS:
+
+400 - VALIDATION_ERROR:
+- Missing required fields
+- Invalid tag ID format
+
+404 - NOT_FOUND:
+- Menu item doesn't exist
+- Tag doesn't exist
+
+409 - DUPLICATE_ERROR:
+- Tag already assigned to menu item
+
+FRONTEND ERROR HANDLING:
+```javascript
+const handleTagAssignment = async (menuItemId, tagId) => {
+  try {
+    const response = await fetch(`/api/v1/menu-item-tags/${menuItemId}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ tagId })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      switch (response.status) {
+        case 400:
+          throw new Error('Invalid tag or menu item');
+        case 404:
+          throw new Error('Menu item or tag not found');
+        case 409:
+          throw new Error('Tag already assigned to this item');
+        default:
+          throw new Error(result.message || 'Failed to assign tag');
+      }
+    }
+
+    return result.data.tag;
+  } catch (error) {
+    console.error('Tag assignment error:', error);
+    // Show user-friendly error message
+    showErrorToast(error.message);
+    throw error;
+  }
+};
+```
+
+==================================================================================
+6. COMPLETE EXAMPLE COMPONENT
+==================================================================================
+
+Here's a complete Vue.js component example:
+
+```javascript
+<template>
+  <div class="menu-item-form">
+    <!-- Basic menu item fields -->
+    <input v-model="menuItem.name" placeholder="Item name" />
+    <textarea v-model="menuItem.description" placeholder="Description"></textarea>
+    <input v-model="menuItem.price" type="number" placeholder="Price" />
+    
+    <!-- Tags section -->
+    <div class="tags-section">
+      <h4>Dietary Tags</h4>
+      <div class="tags-grid">
+        <div 
+          v-for="tag in availableTags" 
+          :key="tag.id" 
+          class="tag-item"
+        >
+          <input 
+            type="checkbox" 
+            :id="tag.id"
+            :value="tag.id"
+            v-model="selectedTagIds"
+          />
+          <label 
+            :for="tag.id"
+            class="tag-label"
+            :style="{ backgroundColor: tag.color }"
+          >
+            {{ tag.name }}
+          </label>
+        </div>
+      </div>
+    </div>
+    
+    <button @click="saveMenuItem">Save Menu Item</button>
+  </div>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      menuItem: {
+        name: '',
+        description: '',
+        price: 0
+      },
+      availableTags: [],
+      selectedTagIds: []
+    };
+  },
+  async created() {
+    await this.fetchTags();
+  },
+  methods: {
+    async fetchTags() {
+      try {
+        const response = await fetch('/api/v1/menu-tags', {
+          headers: {
+            'Authorization': `Bearer ${this.$store.state.token}`
+          }
+        });
+        const data = await response.json();
+        this.availableTags = data.data.tags;
+      } catch (error) {
+        console.error('Error fetching tags:', error);
+      }
+    },
+    
+    async saveMenuItem() {
+      try {
+        const payload = {
+          ...this.menuItem,
+          tags: this.selectedTagIds
+        };
+        
+        const response = await fetch('/api/v1/menu/items', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.$store.state.token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        if (result.success) {
+          this.$emit('item-saved', result.data.item);
+          this.resetForm();
+        }
+      } catch (error) {
+        console.error('Error saving menu item:', error);
+      }
+    },
+    
+    resetForm() {
+      this.menuItem = { name: '', description: '', price: 0 };
+      this.selectedTagIds = [];
+    }
+  }
+};
+</script>
+```
+
+==================================================================================
+7. PREDEFINED TAGS REFERENCE
+==================================================================================
+
+ID                  | Name               | Color     | Description
+--------------------|--------------------|-----------|---------------------------------
+tag_gluten_free     | Gluten-Free        | #28a745   | No gluten/gluten ingredients
+tag_dairy_free      | Dairy-Free         | #17a2b8   | No dairy products
+tag_nut_free        | Nut-Free           | #fd7e14   | No tree nuts
+tag_peanut_free     | Peanut-Free        | #dc3545   | No peanuts
+tag_egg_free        | Egg-Free           | #ffc107   | No eggs
+tag_soy_free        | Soy-Free           | #6f42c1   | No soy products
+tag_shellfish_free  | Shellfish-Free     | #20c997   | No shellfish
+tag_sesame_free     | Sesame-Free        | #6c757d   | No sesame
+tag_wheat_free      | Wheat-Free         | #e83e8c   | No wheat
+tag_lactose_free    | Lactose-Free       | #007bff   | No lactose
+tag_allergen_free   | Allergen-Free      | #198754   | Free from all major allergens
+
+==================================================================================
+8. QUICK CHECKLIST
+==================================================================================
+
+□ Fetch available tags on component mount
+□ Display tags as selectable checkboxes/toggles  
+□ Include selected tag IDs in create/update requests
+□ Display assigned tags on menu items with colors
+□ Handle tag assignment/removal errors gracefully
+□ Style tags consistently across the application
+□ Test tag persistence after menu item updates
+□ Verify tags display correctly in menu listings
+
+==================================================================================
+END OF GUIDE
+==================================================================================

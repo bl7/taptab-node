@@ -1,0 +1,851 @@
+INGREDIENTS & ALLERGENS API IMPLEMENTATION GUIDE
+==================================================
+
+OVERVIEW
+--------
+This guide covers the complete API for managing ingredients and allergens in the restaurant POS system.
+The system supports both standard allergens (shared across all tenants) and custom allergens (tenant-specific).
+
+AUTHENTICATION
+--------------
+All endpoints require authentication. Include the JWT token in the Authorization header:
+Authorization: Bearer <your-jwt-token>
+
+BASE URL: http://localhost:5050/api/v1
+
+==================================================================================
+1. INGREDIENTS MANAGEMENT
+==================================================================================
+
+1.1 GET /ingredients - List all ingredients
+-------------------------------------------
+Method: GET
+URL: /api/v1/ingredients
+Headers: Authorization: Bearer <token>
+
+Query Parameters:
+- search (optional): Search by name or description
+- page (optional): Page number (default: 1)
+- limit (optional): Items per page (default: 50)
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "ingredients": [
+      {
+        "id": "ing_1234567890_abc123",
+        "name": "Tomato",
+        "description": "Fresh tomatoes",
+        "unit": "pieces",
+        "costPerUnit": 0.50,
+        "tenantId": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+        "isActive": true,
+        "createdAt": "2025-08-05T21:30:00.000Z",
+        "updatedAt": "2025-08-05T21:30:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 1,
+      "totalPages": 1
+    }
+  }
+}
+
+1.2 GET /ingredients/:id - Get ingredient by ID
+-----------------------------------------------
+Method: GET
+URL: /api/v1/ingredients/:id
+Headers: Authorization: Bearer <token>
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "ingredient": {
+      "id": "ing_1234567890_abc123",
+      "name": "Tomato",
+      "description": "Fresh tomatoes",
+      "unit": "pieces",
+      "costPerUnit": 0.50,
+      "tenantId": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+      "isActive": true,
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:30:00.000Z"
+    }
+  }
+}
+
+1.3 POST /ingredients - Create new ingredient
+---------------------------------------------
+Method: POST
+URL: /api/v1/ingredients
+Headers: 
+- Authorization: Bearer <token>
+- Content-Type: application/json
+
+Request Body:
+{
+  "name": "Onion",
+  "description": "Fresh onions",
+  "unit": "pieces",
+  "costPerUnit": 0.30
+}
+
+Response (201):
+{
+  "success": true,
+  "data": {
+    "ingredient": {
+      "id": "ing_1234567890_def456",
+      "name": "Onion",
+      "description": "Fresh onions",
+      "unit": "pieces",
+      "costPerUnit": 0.30,
+      "tenantId": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+      "isActive": true,
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:30:00.000Z"
+    }
+  }
+}
+
+1.4 PUT /ingredients/:id - Update ingredient
+--------------------------------------------
+Method: PUT
+URL: /api/v1/ingredients/:id
+Headers: 
+- Authorization: Bearer <token>
+- Content-Type: application/json
+
+Request Body:
+{
+  "name": "Red Onion",
+  "description": "Fresh red onions",
+  "unit": "pieces",
+  "costPerUnit": 0.35
+}
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "ingredient": {
+      "id": "ing_1234567890_def456",
+      "name": "Red Onion",
+      "description": "Fresh red onions",
+      "unit": "pieces",
+      "costPerUnit": 0.35,
+      "tenantId": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+      "isActive": true,
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:35:00.000Z"
+    }
+  }
+}
+
+1.5 DELETE /ingredients/:id - Delete ingredient
+-----------------------------------------------
+Method: DELETE
+URL: /api/v1/ingredients/:id
+Headers: Authorization: Bearer <token>
+
+Response (200):
+{
+  "success": true,
+  "message": "Ingredient deleted successfully"
+}
+
+Error (400) - If ingredient is used in menu items:
+{
+  "success": false,
+  "error": "DEPENDENCY_ERROR",
+  "message": "Cannot delete ingredient as it is used in menu items"
+}
+
+==================================================================================
+2. ALLERGENS MANAGEMENT
+==================================================================================
+
+2.1 GET /allergens - List all allergens (standard + custom)
+-----------------------------------------------------------
+Method: GET
+URL: /api/v1/allergens
+Headers: Authorization: Bearer <token>
+
+Query Parameters:
+- search (optional): Search by name or description
+- page (optional): Page number (default: 1)
+- limit (optional): Items per page (default: 50)
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "allergens": [
+      {
+        "id": "alg_1234567890_xyz789",
+        "name": "Peanuts",
+        "description": "Contains peanuts",
+        "severity": "HIGH",
+        "isStandard": true,
+        "tenantId": null,
+        "isActive": true,
+        "createdAt": "2025-08-05T21:30:00.000Z",
+        "updatedAt": "2025-08-05T21:30:00.000Z"
+      },
+      {
+        "id": "alg_1234567890_abc123",
+        "name": "Custom Allergen",
+        "description": "Restaurant specific allergen",
+        "severity": "MEDIUM",
+        "isStandard": false,
+        "tenantId": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+        "isActive": true,
+        "createdAt": "2025-08-05T21:30:00.000Z",
+        "updatedAt": "2025-08-05T21:30:00.000Z"
+      }
+    ],
+    "pagination": {
+      "page": 1,
+      "limit": 50,
+      "total": 2,
+      "totalPages": 1
+    }
+  }
+}
+
+Note: Standard allergens (isStandard: true) appear first, followed by custom allergens.
+
+2.2 GET /allergens/:id - Get allergen by ID
+--------------------------------------------
+Method: GET
+URL: /api/v1/allergens/:id
+Headers: Authorization: Bearer <token>
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "allergen": {
+      "id": "alg_1234567890_xyz789",
+      "name": "Peanuts",
+      "description": "Contains peanuts",
+      "severity": "HIGH",
+      "isStandard": true,
+      "tenantId": null,
+      "isActive": true,
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:30:00.000Z"
+    }
+  }
+}
+
+2.3 POST /allergens - Create custom allergen
+--------------------------------------------
+Method: POST
+URL: /api/v1/allergens
+Headers: 
+- Authorization: Bearer <token>
+- Content-Type: application/json
+
+Request Body:
+{
+  "name": "Custom Allergen",
+  "description": "Restaurant specific allergen",
+  "severity": "MEDIUM"
+}
+
+Severity options: "LOW", "MEDIUM", "HIGH", "CRITICAL"
+
+Response (201):
+{
+  "success": true,
+  "data": {
+    "allergen": {
+      "id": "alg_1234567890_def456",
+      "name": "Custom Allergen",
+      "description": "Restaurant specific allergen",
+      "severity": "MEDIUM",
+      "isStandard": false,
+      "tenantId": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+      "isActive": true,
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:30:00.000Z"
+    }
+  }
+}
+
+2.4 PUT /allergens/:id - Update custom allergen
+-----------------------------------------------
+Method: PUT
+URL: /api/v1/allergens/:id
+Headers: 
+- Authorization: Bearer <token>
+- Content-Type: application/json
+
+Request Body:
+{
+  "name": "Updated Custom Allergen",
+  "description": "Updated description",
+  "severity": "HIGH"
+}
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "allergen": {
+      "id": "alg_1234567890_def456",
+      "name": "Updated Custom Allergen",
+      "description": "Updated description",
+      "severity": "HIGH",
+      "isStandard": false,
+      "tenantId": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+      "isActive": true,
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:35:00.000Z"
+    }
+  }
+}
+
+Error (403) - If trying to update standard allergen:
+{
+  "success": false,
+  "error": "FORBIDDEN",
+  "message": "Cannot modify standard allergens"
+}
+
+2.5 DELETE /allergens/:id - Delete custom allergen
+--------------------------------------------------
+Method: DELETE
+URL: /api/v1/allergens/:id
+Headers: Authorization: Bearer <token>
+
+Response (200):
+{
+  "success": true,
+  "message": "Allergen deleted successfully"
+}
+
+Error (403) - If trying to delete standard allergen:
+{
+  "success": false,
+  "error": "FORBIDDEN",
+  "message": "Cannot delete standard allergens"
+}
+
+==================================================================================
+3. MENU ITEM INGREDIENTS MANAGEMENT
+==================================================================================
+
+3.1 GET /menu-items/:menuItemId/ingredients - Get ingredients for menu item
+---------------------------------------------------------------------------
+Method: GET
+URL: /api/v1/menu-items/:menuItemId/ingredients
+Headers: Authorization: Bearer <token>
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "ingredients": [
+      {
+        "id": "mii_1234567890_abc123",
+        "menuItemId": "menu_1234567890_xyz789",
+        "ingredientId": "ing_1234567890_def456",
+        "quantity": 2.5,
+        "unit": "pieces",
+        "createdAt": "2025-08-05T21:30:00.000Z",
+        "updatedAt": "2025-08-05T21:30:00.000Z",
+        "ingredient": {
+          "id": "ing_1234567890_def456",
+          "name": "Tomato",
+          "description": "Fresh tomatoes",
+          "unit": "pieces",
+          "costPerUnit": 0.50
+        }
+      }
+    ]
+  }
+}
+
+3.2 POST /menu-items/:menuItemId/ingredients - Add ingredient to menu item
+---------------------------------------------------------------------------
+Method: POST
+URL: /api/v1/menu-items/:menuItemId/ingredients
+Headers: 
+- Authorization: Bearer <token>
+- Content-Type: application/json
+
+Request Body:
+{
+  "ingredientId": "ing_1234567890_def456",
+  "quantity": 2.5,
+  "unit": "pieces"
+}
+
+Response (201):
+{
+  "success": true,
+  "data": {
+    "menuItemIngredient": {
+      "id": "mii_1234567890_abc123",
+      "menuItemId": "menu_1234567890_xyz789",
+      "ingredientId": "ing_1234567890_def456",
+      "quantity": 2.5,
+      "unit": "pieces",
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:30:00.000Z"
+    }
+  }
+}
+
+3.3 PUT /menu-items/:menuItemId/ingredients/:ingredientId - Update ingredient quantity
+-------------------------------------------------------------------------------------
+Method: PUT
+URL: /api/v1/menu-items/:menuItemId/ingredients/:ingredientId
+Headers: 
+- Authorization: Bearer <token>
+- Content-Type: application/json
+
+Request Body:
+{
+  "quantity": 3.0,
+  "unit": "pieces"
+}
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "menuItemIngredient": {
+      "id": "mii_1234567890_abc123",
+      "menuItemId": "menu_1234567890_xyz789",
+      "ingredientId": "ing_1234567890_def456",
+      "quantity": 3.0,
+      "unit": "pieces",
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:35:00.000Z"
+    }
+  }
+}
+
+3.4 DELETE /menu-items/:menuItemId/ingredients/:ingredientId - Remove ingredient from menu item
+----------------------------------------------------------------------------------------------
+Method: DELETE
+URL: /api/v1/menu-items/:menuItemId/ingredients/:ingredientId
+Headers: Authorization: Bearer <token>
+
+Response (200):
+{
+  "success": true,
+  "message": "Ingredient removed from menu item successfully"
+}
+
+==================================================================================
+4. INGREDIENT ALLERGENS MANAGEMENT
+==================================================================================
+
+4.1 GET /ingredient-allergens/ingredients/:ingredientId - Get allergens for ingredient
+-------------------------------------------------------------------------------------
+Method: GET
+URL: /api/v1/ingredient-allergens/ingredients/:ingredientId
+Headers: Authorization: Bearer <token>
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "allergens": [
+      {
+        "id": "ia_1234567890_abc123",
+        "ingredientId": "ing_1234567890_def456",
+        "allergenId": "alg_1234567890_xyz789",
+        "createdAt": "2025-08-05T21:30:00.000Z",
+        "updatedAt": "2025-08-05T21:30:00.000Z",
+        "allergen": {
+          "id": "alg_1234567890_xyz789",
+          "name": "Peanuts",
+          "description": "Contains peanuts",
+          "severity": "HIGH",
+          "isStandard": true
+        }
+      }
+    ]
+  }
+}
+
+4.2 POST /ingredient-allergens - Add allergen to ingredient
+-----------------------------------------------------------
+Method: POST
+URL: /api/v1/ingredient-allergens
+Headers: 
+- Authorization: Bearer <token>
+- Content-Type: application/json
+
+Request Body:
+{
+  "ingredientId": "ing_1234567890_def456",
+  "allergenId": "alg_1234567890_xyz789"
+}
+
+Response (201):
+{
+  "success": true,
+  "data": {
+    "ingredientAllergen": {
+      "id": "ia_1234567890_abc123",
+      "ingredientId": "ing_1234567890_def456",
+      "allergenId": "alg_1234567890_xyz789",
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:30:00.000Z"
+    }
+  }
+}
+
+4.3 DELETE /ingredient-allergens/:ingredientId/:allergenId - Remove allergen from ingredient
+-------------------------------------------------------------------------------------------
+Method: DELETE
+URL: /api/v1/ingredient-allergens/:ingredientId/:allergenId
+Headers: Authorization: Bearer <token>
+
+Response (200):
+{
+  "success": true,
+  "message": "Allergen removed from ingredient successfully"
+}
+
+4.4 GET /ingredient-allergens/menu-items/:menuItemId - Get allergens for menu item (auto-calculated)
+---------------------------------------------------------------------------------------------------
+Method: GET
+URL: /api/v1/ingredient-allergens/menu-items/:menuItemId
+Headers: Authorization: Bearer <token>
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "allergens": [
+      {
+        "id": "alg_1234567890_xyz789",
+        "name": "Peanuts",
+        "description": "Contains peanuts",
+        "severity": "HIGH",
+        "isStandard": true,
+        "sources": [
+          {
+            "ingredientId": "ing_1234567890_def456",
+            "ingredientName": "Peanut Butter"
+          }
+        ]
+      }
+    ]
+  }
+}
+
+This endpoint automatically calculates all allergens for a menu item based on its ingredients.
+
+==================================================================================
+5. STANDARD ALLERGENS
+==================================================================================
+
+The system includes 14 standard allergens that are shared across all tenants:
+
+1. Celery
+2. Cereals containing gluten (wheat, rye, barley, oats, spelt, and their hybrids)
+3. Crustaceans (e.g. crab, lobster, shrimp)
+4. Eggs
+5. Fish
+6. Lupin
+7. Milk
+8. Molluscs (e.g. mussels, oysters, squid)
+9. Mustard
+10. Nuts (tree nuts such as almonds, hazelnuts, walnuts, cashews, pecans, Brazil nuts, pistachios, macadamia)
+11. Peanuts
+12. Sesame seeds
+13. Soybeans
+14. Sulphur dioxide and sulphites (at concentrations above 10 mg/kg or 10 mg/L)
+
+These standard allergens:
+- Cannot be modified or deleted
+- Are available to all tenants
+- Have isStandard: true and tenantId: null
+
+==================================================================================
+6. ERROR RESPONSES
+==================================================================================
+
+All endpoints may return these error responses:
+
+400 - VALIDATION_ERROR:
+{
+  "success": false,
+  "error": "VALIDATION_ERROR",
+  "message": "Validation failed",
+  "details": {
+    "field": "error message"
+  }
+}
+
+401 - UNAUTHORIZED:
+{
+  "success": false,
+  "error": "UNAUTHORIZED",
+  "message": "Invalid or missing token"
+}
+
+403 - FORBIDDEN:
+{
+  "success": false,
+  "error": "FORBIDDEN",
+  "message": "Insufficient permissions"
+}
+
+404 - NOT_FOUND:
+{
+  "success": false,
+  "error": "NOT_FOUND",
+  "message": "Resource not found"
+}
+
+409 - DUPLICATE_ERROR:
+{
+  "success": false,
+  "error": "DUPLICATE_ERROR",
+  "message": "Resource already exists"
+}
+
+500 - FETCH_ERROR/CREATE_ERROR/UPDATE_ERROR/DELETE_ERROR:
+{
+  "success": false,
+  "error": "FETCH_ERROR",
+  "message": "Failed to fetch resources"
+}
+
+==================================================================================
+7. FRONTEND IMPLEMENTATION TIPS
+==================================================================================
+
+1. **Ingredient Management**:
+   - Use the ingredients list to populate dropdowns for menu item creation
+   - Show cost per unit for pricing calculations
+   - Implement search functionality for large ingredient lists
+
+2. **Allergen Management**:
+   - Display standard allergens first, then custom allergens
+   - Use different styling for standard vs custom allergens
+   - Show severity levels with color coding (LOW=green, MEDIUM=yellow, HIGH=orange, CRITICAL=red)
+
+3. **Menu Item Ingredients**:
+   - Allow adding multiple ingredients to a menu item
+   - Show total cost calculation based on ingredient costs
+   - Validate that ingredients exist before adding
+
+4. **Allergen Detection**:
+   - Use the auto-calculated allergens endpoint to show allergen warnings
+   - Display allergen information prominently on menu items
+   - Show which ingredients contain each allergen
+
+5. **Data Validation**:
+   - Validate required fields before submission
+   - Check for duplicate names within the same tenant
+   - Ensure proper data types (numbers for quantities, etc.)
+
+6. **User Experience**:
+   - Show loading states during API calls
+   - Display success/error messages
+   - Implement confirmation dialogs for deletions
+   - Use pagination for large lists
+
+==================================================================================
+8. EXAMPLE FRONTEND FLOW
+==================================================================================
+
+1. **Create Ingredient**:
+   - User fills form with name, description, unit, cost
+   - POST to /ingredients
+   - Show success message and refresh list
+
+2. **Add Ingredient to Menu Item**:
+   - User selects menu item
+   - User selects ingredient from dropdown
+   - User enters quantity and unit
+   - POST to /menu-items/:id/ingredients
+   - Show updated ingredient list
+
+3. **Add Allergen to Ingredient**:
+   - User selects ingredient
+   - User selects allergen from list (standard + custom)
+   - POST to /ingredient-allergens
+   - Show updated allergen list
+
+4. **View Menu Item Allergens**:
+   - User selects menu item
+   - GET from /ingredient-allergens/menu-items/:id
+   - Display allergen warnings with severity levels
+
+==================================================================================
+9. UPDATED MENU ITEMS ROUTES
+==================================================================================
+
+The menu items routes have been updated to support ingredients:
+
+9.1 POST /api/v1/menu/items - Create menu item with ingredients
+----------------------------------------------------------------
+Method: POST
+URL: /api/v1/menu/items
+Headers: 
+- Authorization: Bearer <token>
+- Content-Type: application/json
+
+Request Body:
+{
+  "name": "Burger",
+  "description": "Delicious burger",
+  "price": 12.99,
+  "categoryId": "category_id",
+  "image": "image_url",
+  "ingredients": [
+    {
+      "ingredientId": "ingredient_id",
+      "quantity": 2.5,
+      "unit": "pieces"
+    }
+  ]
+}
+
+Response (201):
+{
+  "success": true,
+  "data": {
+    "item": {
+      "id": "menu_item_id",
+      "name": "Burger",
+      "description": "Delicious burger",
+      "price": 12.99,
+      "category": "Main Course",
+      "categoryId": "category_id",
+      "image": "image_url",
+      "isActive": true,
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:30:00.000Z",
+      "ingredients": [
+        {
+          "id": "mii_relationship_id",
+          "ingredientId": "ingredient_id",
+          "quantity": 2.5,
+          "unit": "pieces",
+          "ingredient": {
+            "id": "ingredient_id",
+            "name": "Beef Patty",
+            "description": "Fresh beef patty",
+            "unit": "pieces",
+            "costPerUnit": 3.50
+          }
+        }
+      ],
+      "allergens": [
+        {
+          "id": "allergen_id",
+          "name": "Gluten",
+          "description": "Contains gluten",
+          "severity": "HIGH",
+          "isStandard": true,
+          "sources": [
+            {
+              "ingredientId": "bun_ingredient_id",
+              "ingredientName": "Burger Bun"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+9.2 PUT /api/v1/menu/items/:id - Update menu item with ingredients
+-------------------------------------------------------------------
+Method: PUT
+URL: /api/v1/menu/items/:id
+Headers: 
+- Authorization: Bearer <token>
+- Content-Type: application/json
+
+Request Body:
+{
+  "name": "Updated Burger",
+  "description": "Updated description",
+  "price": 13.99,
+  "categoryId": "category_id",
+  "image": "image_url",
+  "ingredients": [
+    {
+      "ingredientId": "ingredient_id",
+      "quantity": 3.0,
+      "unit": "pieces"
+    }
+  ]
+}
+
+Response (200):
+{
+  "success": true,
+  "data": {
+    "item": {
+      "id": "menu_item_id",
+      "name": "Updated Burger",
+      "description": "Updated description",
+      "price": 13.99,
+      "category": "Main Course",
+      "categoryId": "category_id",
+      "image": "image_url",
+      "isActive": true,
+      "createdAt": "2025-08-05T21:30:00.000Z",
+      "updatedAt": "2025-08-05T21:35:00.000Z",
+      "ingredients": [
+        {
+          "id": "mii_relationship_id",
+          "ingredientId": "ingredient_id",
+          "quantity": 3.0,
+          "unit": "pieces",
+          "ingredient": {
+            "id": "ingredient_id",
+            "name": "Beef Patty",
+            "description": "Fresh beef patty",
+            "unit": "pieces",
+            "costPerUnit": 3.50
+          }
+        }
+      ],
+      "allergens": [
+        {
+          "id": "allergen_id",
+          "name": "Gluten",
+          "description": "Contains gluten",
+          "severity": "HIGH",
+          "isStandard": true,
+          "sources": [
+            {
+              "ingredientId": "bun_ingredient_id",
+              "ingredientName": "Burger Bun"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+Key Features:
+- ✅ Ingredient validation - Checks that ingredientId and quantity are provided
+- ✅ Ingredient existence check - Verifies ingredients exist and belong to tenant
+- ✅ Complete ingredient replacement - PUT route replaces all ingredients (not additive)
+- ✅ Auto-calculated allergens - Allergens are automatically determined from ingredients
+- ✅ Rich response - Returns complete menu item with ingredients and allergens
+
+==================================================================================
+END OF IMPLEMENTATION GUIDE
+================================================================================== 
