@@ -21,15 +21,23 @@ export const getClient = async (): Promise<PoolClient> => {
     } catch (error) {
       lastError = error;
       logger.error(`Database connection attempt ${attempt} failed:`, error);
-      
+
       if (attempt < maxRetries) {
         // Wait before retrying (exponential backoff)
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100));
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.pow(2, attempt) * 100)
+        );
       }
     }
   }
-  
-  throw new DatabaseError("Database connection failed after retries", "CONNECTION_ERROR");
+
+  throw (
+    lastError ||
+    new DatabaseError(
+      "Database connection failed after retries",
+      "CONNECTION_ERROR"
+    )
+  );
 };
 
 // Generic find by ID with tenant check

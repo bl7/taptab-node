@@ -82,7 +82,7 @@ class SocketManager {
     const notificationData = {
       type: 'PRINT_RECEIPT',
       order: orderData,
-      notificationId: notificationId,
+      notificationId,
       timestamp: new Date().toISOString()
     };
 
@@ -123,8 +123,8 @@ class SocketManager {
     const notificationData = {
       type: 'PRINT_MODIFIED_RECEIPT',
       order: orderData,
-      changes: changes,
-      notificationId: notificationId,
+      changes,
+      notificationId,
       timestamp: new Date().toISOString()
     };
 
