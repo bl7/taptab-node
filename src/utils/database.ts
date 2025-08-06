@@ -28,7 +28,7 @@ export const findById = async (
 ) => {
   const client = await getClient();
   try {
-    const query = `SELECT * FROM "${tableName}" WHERE id = $1 AND tenantId = $2`;
+    const query = `SELECT * FROM "${tableName}" WHERE id = $1 AND "tenantId" = $2`;
     const result = await client.query(query, [id, tenantId]);
 
     if (result.rows.length === 0) {
@@ -56,7 +56,7 @@ export const createWithCheck = async (
   const client = await getClient();
   try {
     // Check for duplicates
-    const checkQuery = `SELECT id FROM "${tableName}" WHERE ${checkField} = $1 AND tenantId = $2`;
+    const checkQuery = `SELECT id FROM "${tableName}" WHERE ${checkField} = $1 AND "tenantId" = $2`;
     const checkResult = await client.query(checkQuery, [checkValue, tenantId]);
 
     if (checkResult.rows.length > 0) {
@@ -100,7 +100,7 @@ export const updateWithCheck = async (
 
     const updateQuery = `UPDATE "${tableName}" SET ${setClause} WHERE id = $${
       values.length + 1
-    } AND tenantId = $${values.length + 2} RETURNING *`;
+    } AND "tenantId" = $${values.length + 2} RETURNING *`;
     const result = await client.query(updateQuery, [...values, id, tenantId]);
 
     if (result.rows.length === 0) {
@@ -137,7 +137,7 @@ export const deleteWithCheck = async (
       }
     }
 
-    const deleteQuery = `DELETE FROM "${tableName}" WHERE id = $1 AND tenantId = $2`;
+    const deleteQuery = `DELETE FROM "${tableName}" WHERE id = $1 AND "tenantId" = $2`;
     const result = await client.query(deleteQuery, [id, tenantId]);
 
     if (result.rowCount === 0) {
