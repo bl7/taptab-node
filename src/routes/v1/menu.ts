@@ -57,14 +57,14 @@ router.get("/items", authenticateToken, async (req: Request, res: Response) => {
         const ingredients = ingredientsResult.rows.map((ing: any) => ({
           id: ing.id,
           ingredientId: ing.ingredientId,
-          quantity: parseFloat(ing.quantity.toString()),
+          quantity: parseFloat((ing.quantity || 0).toString()),
           unit: ing.unit,
           ingredient: {
             id: ing.ingredientId,
             name: ing.ingredient_name,
             description: ing.ingredient_description,
             unit: ing.ingredient_unit,
-            costPerUnit: parseFloat(ing.costPerUnit.toString()),
+            costPerUnit: parseFloat((ing.costPerUnit || 0).toString()),
           },
         }));
 
@@ -103,7 +103,7 @@ router.get("/items", authenticateToken, async (req: Request, res: Response) => {
 
         // Get tags for this menu item
         const tagsQuery = `
-          SELECT mt.id, mt.name, mt.description, mt.color, mit.createdAt as assignedAt
+          SELECT mt.id, mt.name, mt.description, mt.color, mit.createdat as assignedAt
           FROM "menuItemTags" mit
           JOIN menuTags mt ON mit."tagId" = mt.id
           WHERE mit."menuItemId" = $1 AND mt.isActive = true
@@ -122,7 +122,7 @@ router.get("/items", authenticateToken, async (req: Request, res: Response) => {
           id: item.id,
           name: item.name,
           description: item.description,
-          price: parseFloat(item.price.toString()),
+          price: parseFloat((item.price || 0).toString()),
           category: item.category_name,
           categoryId: item.categoryId,
           image: item.image,
@@ -151,6 +151,13 @@ router.post(
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
+
+      // DEBUG: Log the incoming request
+      console.log("=== POST MENU ITEM DEBUG ===");
+      console.log("Request Body:", JSON.stringify(req.body, null, 2));
+      console.log("Tenant ID:", tenantId);
+      console.log("===========================");
+
       const {
         name,
         description,
@@ -202,7 +209,7 @@ router.post(
 
           // Verify ingredient exists and belongs to tenant
           const ingredientResult = await executeQuery(
-            'SELECT id FROM ingredients WHERE id = $1 AND "tenantId" = $2',
+            "SELECT id FROM ingredients WHERE id = $1 AND tenantId = $2",
             [ingredient.ingredientId, tenantId]
           );
 
@@ -223,13 +230,22 @@ router.post(
         description,
         price,
         categoryId: categoryId || null,
-        tenantId,
+        tenantId: tenantId, // quoted camelCase to match DB column
         image,
         sortOrder: 0,
         isActive: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
+
+      // DEBUG: Log the itemData before database call
+      console.log("=== ITEM DATA DEBUG ===");
+      console.log("Item Data:", JSON.stringify(itemData, null, 2));
+      console.log("Table: menuItems");
+      console.log("Check Field: name");
+      console.log("Check Value:", name);
+      console.log("Tenant ID:", tenantId);
+      console.log("=======================");
 
       const item = await createWithCheck(
         "menuItems",
@@ -247,22 +263,16 @@ router.post(
             menuItemId: item.id,
             ingredientId: ingredient.ingredientId,
             quantity: ingredient.quantity,
-            unit: ingredient.unit || null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
           };
 
           await executeQuery(
-            `INSERT INTO "menuItemIngredients" (id, "menuItemId", "ingredientId", quantity, unit, "createdAt", "updatedAt") 
-             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            `INSERT INTO "menuItemIngredients" (id, "menuItemId", "ingredientId", quantity) 
+             VALUES ($1, $2, $3, $4)`,
             [
               menuItemIngredientData.id,
               menuItemIngredientData.menuItemId,
               menuItemIngredientData.ingredientId,
               menuItemIngredientData.quantity,
-              menuItemIngredientData.unit,
-              menuItemIngredientData.createdAt,
-              menuItemIngredientData.updatedAt,
             ]
           );
         }
@@ -307,7 +317,7 @@ router.post(
           };
 
           await executeQuery(
-            `INSERT INTO "menuItemTags" (id, "menuItemId", "tagId", "createdAt") 
+            `INSERT INTO "menuItemTags" (id, "menuItemId", "tagId", createdat) 
              VALUES ($1, $2, $3, $4)`,
             [
               menuItemTagData.id,
@@ -341,14 +351,14 @@ router.post(
       const menuItemIngredients = ingredientsResult.rows.map((ing: any) => ({
         id: ing.id,
         ingredientId: ing.ingredientId,
-        quantity: parseFloat(ing.quantity.toString()),
+        quantity: parseFloat((ing.quantity || 0).toString()),
         unit: ing.unit,
         ingredient: {
           id: ing.ingredientId,
           name: ing.ingredient_name,
           description: ing.ingredient_description,
           unit: ing.ingredient_unit,
-          costPerUnit: parseFloat(ing.costPerUnit.toString()),
+          costPerUnit: parseFloat((ing.costPerUnit || 0).toString()),
         },
       }));
 
@@ -386,7 +396,7 @@ router.post(
 
       // Get tags for response
       const tagsQuery = `
-        SELECT mt.id, mt.name, mt.description, mt.color, mit.createdAt as assignedAt
+        SELECT mt.id, mt.name, mt.description, mt.color, mit.createdat as assignedAt
         FROM "menuItemTags" mit
         JOIN menuTags mt ON mit."tagId" = mt.id
         WHERE mit."menuItemId" = $1 AND mt.isActive = true
@@ -405,7 +415,7 @@ router.post(
         id: item.id,
         name: item.name,
         description: item.description,
-        price: parseFloat(item.price.toString()),
+        price: parseFloat((item.price || 0).toString()),
         category: categoryName,
         categoryId: item.categoryId,
         image: item.image,
@@ -489,7 +499,7 @@ router.put(
 
           // Verify ingredient exists and belongs to tenant
           const ingredientResult = await executeQuery(
-            'SELECT id FROM ingredients WHERE id = $1 AND "tenantId" = $2',
+            "SELECT id FROM ingredients WHERE id = $1 AND tenantId = $2",
             [ingredient.ingredientId, tenantId]
           );
 
@@ -535,21 +545,17 @@ router.put(
               ingredientId: ingredient.ingredientId,
               quantity: ingredient.quantity,
               unit: ingredient.unit || null,
-              createdAt: new Date(),
-              updatedAt: new Date(),
             };
 
             await executeQuery(
-              `INSERT INTO "menuItemIngredients" (id, "menuItemId", "ingredientId", quantity, unit, "createdAt", "updatedAt") 
-               VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+              `INSERT INTO "menuItemIngredients" (id, "menuItemId", "ingredientId", quantity, unit) 
+               VALUES ($1, $2, $3, $4, $5)`,
               [
                 menuItemIngredientData.id,
                 menuItemIngredientData.menuItemId,
                 menuItemIngredientData.ingredientId,
                 menuItemIngredientData.quantity,
                 menuItemIngredientData.unit,
-                menuItemIngredientData.createdAt,
-                menuItemIngredientData.updatedAt,
               ]
             );
           }
@@ -605,7 +611,7 @@ router.put(
             };
 
             await executeQuery(
-              `INSERT INTO "menuItemTags" (id, "menuItemId", "tagId", "createdAt") 
+              `INSERT INTO "menuItemTags" (id, "menuItemId", "tagId", createdat) 
                VALUES ($1, $2, $3, $4)`,
               [
                 menuItemTagData.id,
@@ -636,14 +642,14 @@ router.put(
       const menuItemIngredients = ingredientsResult.rows.map((ing: any) => ({
         id: ing.id,
         ingredientId: ing.ingredientId,
-        quantity: parseFloat(ing.quantity.toString()),
+        quantity: parseFloat((ing.quantity || 0).toString()),
         unit: ing.unit,
         ingredient: {
           id: ing.ingredientId,
           name: ing.ingredient_name,
           description: ing.ingredient_description,
           unit: ing.ingredient_unit,
-          costPerUnit: parseFloat(ing.costPerUnit.toString()),
+          costPerUnit: parseFloat((ing.costPerUnit || 0).toString()),
         },
       }));
 
@@ -681,7 +687,7 @@ router.put(
 
       // Get tags for response
       const tagsQuery = `
-        SELECT mt.id, mt.name, mt.description, mt.color, mit.createdAt as assignedAt
+        SELECT mt.id, mt.name, mt.description, mt.color, mit.createdat as assignedAt
         FROM "menuItemTags" mit
         JOIN menuTags mt ON mit."tagId" = mt.id
         WHERE mit."menuItemId" = $1 AND mt.isActive = true
@@ -700,7 +706,7 @@ router.put(
         id: item.id,
         name: item.name,
         description: item.description,
-        price: parseFloat(item.price.toString()),
+        price: parseFloat((item.price || 0).toString()),
         category: categoryNameResult.rows[0]?.name || "",
         categoryId: item.categoryId,
         image: item.image,

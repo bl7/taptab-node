@@ -1,34 +1,44 @@
-import { Pool } from "pg"
+import { Pool } from "pg";
 
 const pool = new Pool({
-  host: process.env['DB_HOST'],
-  port: parseInt(process.env['DB_PORT'] || '5432', 10),
-  user: process.env['DB_USER'],
-  password: process.env['DB_PASSWORD'],
-  database: process.env['DB_NAME'],
+  host: process.env["DB_HOST"],
+  port: parseInt(process.env["DB_PORT"] || "5432", 10),
+  user: process.env["DB_USER"],
+  password: process.env["DB_PASSWORD"],
+  database: process.env["DB_NAME"],
   ssl: {
     rejectUnauthorized: false, // required for Aiven
   },
-  // Performance optimizations
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 10000, // Return an error after 10 seconds if connection could not be established
-  maxUses: 7500, // Close (and replace) a connection after it has been used 7500 times
-})
+  // Optimized connection pool settings
+  max: 10, // Reduced from 20 to avoid hitting DB limits
+  min: 2, // Keep at least 2 connections ready
+  idleTimeoutMillis: 10000, // Close idle clients after 10 seconds (reduced from 30)
+  connectionTimeoutMillis: 5000, // Return an error after 5 seconds (reduced from 10)
+  maxUses: 1000, // Close connections after 1000 uses (reduced from 7500)
+  // Add connection retry logic
+  // acquireTimeoutMillis: 3000, // Timeout for acquiring connection (not valid in pg pool config)
+});
 
 // Test query to confirm connection
-pool.query('SELECT current_database()', (err, res) => {
+pool.query("SELECT current_database()", (err, res) => {
   if (err) {
-    console.error('❌ DB Test Failed:', err)
+    console.error("❌ DB Test Failed:", err);
   } else {
-    console.log('✅ Connected to DB:', res.rows[0].current_database)
+    console.log("✅ Connected to DB:", res.rows[0].current_database);
   }
-})
+});
 
 // Handle pool errors
-pool.on('error', (err) => {
-  console.error('Unexpected error on idle client', err)
-  process.exit(-1)
-})
+pool.on("error", (err) => {
+  console.error("Unexpected error on idle client", err);
+  process.exit(-1);
+});
 
-export default pool 
+// Monitor pool status
+setInterval(() => {
+  console.log(
+    `📊 Pool Status - Total: ${pool.totalCount}, Idle: ${pool.idleCount}, Waiting: ${pool.waitingCount}`
+  );
+}, 30000); // Log every 30 seconds
+
+export default pool;

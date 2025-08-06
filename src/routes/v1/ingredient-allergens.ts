@@ -29,7 +29,7 @@ router.get(
 
       // Verify ingredient exists and belongs to tenant
       const ingredientCheck = await executeQuery(
-        'SELECT id FROM ingredients WHERE id = $1 AND "tenantId" = $2',
+        "SELECT id FROM ingredients WHERE id = $1 AND tenantId = $2",
         [ingredientId, tenantId]
       );
 
@@ -97,7 +97,7 @@ router.post(
 
       // Verify ingredient exists and belongs to tenant
       const ingredientCheck = await executeQuery(
-        'SELECT id FROM ingredients WHERE id = $1 AND "tenantId" = $2',
+        "SELECT id FROM ingredients WHERE id = $1 AND tenantId = $2",
         [ingredientId, tenantId]
       );
 

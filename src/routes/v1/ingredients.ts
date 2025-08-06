@@ -22,14 +22,15 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
     const tenantId = getTenantId(req);
     const { search, page = 1, limit = 50 } = req.query;
 
-    let conditions: any = { tenantId: tenantId };
+    let conditions: any = { tenantId: tenantId, isActive: true };
 
     if (search) {
       // For search, we'll need to use a custom query since findMany doesn't support LIKE
       const offset = (Number(page) - 1) * Number(limit);
       const searchQuery = `
         SELECT * FROM ingredients 
-        WHERE "tenantId" = $1 
+        WHERE tenantId = $1 
+        AND isActive = true
         AND (name ILIKE $2 OR description ILIKE $2)
         ORDER BY name ASC
         LIMIT $3 OFFSET $4
@@ -88,10 +89,10 @@ router.get("/", authenticateToken, async (req: Request, res: Response) => {
       name: ingredient.name,
       description: ingredient.description,
       unit: ingredient.unit,
-      costPerUnit: ingredient.costPerUnit,
-      isActive: ingredient.isActive,
-      createdAt: ingredient.createdAt,
-      updatedAt: ingredient.updatedAt,
+      costPerUnit: ingredient.costperunit, // map from DB column
+      isActive: ingredient.isactive, // map from DB column
+      createdAt: ingredient.createdat, // map from DB column
+      updatedAt: ingredient.updatedat, // map from DB column
     }));
 
     sendSuccess(res, { ingredients: formattedIngredients });
@@ -154,11 +155,11 @@ router.post(
         name,
         description: description || "",
         unit: unit || "",
-        costPerUnit: costPerUnit || 0,
-        tenantId,
-        isActive: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        costperunit: costPerUnit || 0, // lowercase to match DB column
+        tenantid: tenantId, // lowercase to match DB column
+        isactive: true, // lowercase to match DB column
+        createdat: new Date(), // lowercase to match DB column
+        updatedat: new Date(), // lowercase to match DB column
       };
 
       const ingredient = await createWithCheck(
@@ -174,10 +175,10 @@ router.post(
         name: ingredient.name,
         description: ingredient.description,
         unit: ingredient.unit,
-        costPerUnit: ingredient.costPerUnit,
-        isActive: ingredient.isActive,
-        createdAt: ingredient.createdAt,
-        updatedAt: ingredient.updatedAt,
+        costPerUnit: ingredient.costperunit, // map from DB column
+        isActive: ingredient.isactive, // map from DB column
+        createdAt: ingredient.createdat, // map from DB column
+        updatedAt: ingredient.updatedat, // map from DB column
       };
 
       logger.info(`Ingredient created: ${ingredient.name}`);
@@ -226,9 +227,9 @@ router.put(
         name,
         description: description || "",
         unit: unit || "",
-        costPerUnit: costPerUnit || 0,
-        isActive: isActive !== undefined ? isActive : true,
-        updatedAt: new Date(),
+        costperunit: costPerUnit || 0, // lowercase to match DB column
+        isactive: isActive !== undefined ? isActive : true, // lowercase to match DB column
+        updatedat: new Date(), // lowercase to match DB column
       };
 
       const ingredient = await updateWithCheck(
@@ -243,10 +244,10 @@ router.put(
         name: ingredient.name,
         description: ingredient.description,
         unit: ingredient.unit,
-        costPerUnit: ingredient.costPerUnit,
-        isActive: ingredient.isActive,
-        createdAt: ingredient.createdAt,
-        updatedAt: ingredient.updatedAt,
+        costPerUnit: ingredient.costperunit, // map from DB column
+        isActive: ingredient.isactive, // map from DB column
+        createdAt: ingredient.createdat, // map from DB column
+        updatedAt: ingredient.updatedat, // map from DB column
       };
 
       logger.info(`Ingredient updated: ${ingredient.name}`);

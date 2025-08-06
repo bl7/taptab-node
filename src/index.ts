@@ -31,12 +31,6 @@ import settingsRoutes from "./routes/v1/settings";
 import tenantRoutes from "./routes/v1/tenants";
 import uploadRoutes from "./routes/v1/upload";
 import dashboardRoutes from "./routes/v1/dashboard";
-import ingredientsRoutes from "./routes/v1/ingredients";
-import allergensRoutes from "./routes/v1/allergens";
-import menuItemIngredientsRoutes from "./routes/v1/menu-item-ingredients";
-import ingredientAllergensRoutes from "./routes/v1/ingredient-allergens";
-import menuTagsRoutes from "./routes/v1/menu-tags";
-import menuItemTagsRoutes from "./routes/v1/menu-item-tags";
 
 // Import public routes for QR ordering
 import publicMenuRoutes from "./routes/v1/public-menu";
@@ -281,42 +275,6 @@ app.use(
   authenticateToken,
   tenantMiddleware,
   dashboardRoutes
-);
-app.use(
-  `/api/${apiVersion}/ingredients`,
-  authenticateToken,
-  tenantMiddleware,
-  ingredientsRoutes
-);
-app.use(
-  `/api/${apiVersion}/allergens`,
-  authenticateToken,
-  tenantMiddleware,
-  allergensRoutes
-);
-app.use(
-  `/api/${apiVersion}/menu-items`,
-  authenticateToken,
-  tenantMiddleware,
-  menuItemIngredientsRoutes
-);
-app.use(
-  `/api/${apiVersion}/ingredient-allergens`,
-  authenticateToken,
-  tenantMiddleware,
-  ingredientAllergensRoutes
-);
-app.use(
-  `/api/${apiVersion}/menu-tags`,
-  authenticateToken,
-  tenantMiddleware,
-  menuTagsRoutes
-);
-app.use(
-  `/api/${apiVersion}/menu-item-tags`,
-  authenticateToken,
-  tenantMiddleware,
-  menuItemTagsRoutes
 );
 
 // Error handling middleware

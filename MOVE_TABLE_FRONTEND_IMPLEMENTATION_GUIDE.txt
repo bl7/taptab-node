@@ -1,0 +1,444 @@
+MOVE TABLE FUNCTIONALITY - FRONTEND IMPLEMENTATION GUIDE
+================================================================
+
+OVERVIEW
+--------
+The "Move Table" functionality allows staff to relocate a single order from one table to another 
+without changing the order items, total, or merging with other orders. This is useful for:
+- Customer requests to change tables
+- Restaurant management (larger table needed, quieter area)
+- Waiter corrections (wrong table initially assigned)
+- Table maintenance or cleaning
+
+API ENDPOINT
+------------
+PUT /api/v1/orders/:orderId/move-table
+
+Headers:
+- Content-Type: application/json
+- Authorization: Bearer {JWT_TOKEN}
+
+Request Body:
+{
+  "tableId": "new_table_id_or_number",
+  "reason": "Optional reason for the move"
+}
+
+Response (Success):
+{
+  "success": true,
+  "data": {
+    "order": {
+      "id": "order_id",
+      "tableId": "new_table_id",
+      "tableNumber": "new_table_number",
+      "items": [...],
+      "total": 66,
+      "status": "active",
+      "oldTable": "previous_table",
+      "newTable": "new_table",
+      "reason": "Customer requested different seating area"
+    },
+    "moveDetails": {
+      "orderId": "order_id",
+      "fromTable": "previous_table",
+      "toTable": "new_table",
+      "reason": "Customer requested different seating area",
+      "movedBy": "User Name",
+      "movedAt": "2025-08-06T15:53:21.718Z"
+    }
+  },
+  "message": "Order moved to new table successfully"
+}
+
+Error Responses:
+- 400: TABLE_NOT_FOUND - "Table not found"
+- 400: SAME_TABLE - "Order is already at the requested table"
+- 400: INVALID_ORDER_STATUS - "Only active or pending orders can be moved"
+- 404: NOT_FOUND - "Order not found"
+- 400: VALIDATION_ERROR - "Order ID or Table ID is required"
+
+FRONTEND IMPLEMENTATION
+=======================
+
+1. BUTTON PLACEMENT
+-------------------
+Add "Move Table" button to every order card/row that has status "active" or "pending".
+
+Example placement in order list:
+┌─────────────────────────────────────┐
+│ Order #123 - Table 5 - $45.50      │
+│ ┌────────┐ ┌──────────┐ ┌──────────┐│
+│ │  Edit  │ │Add Items │ │Move Table││
+│ └────────┘ └──────────┘ └──────────┘│
+│ Status: Active | 3 items             │
+└─────────────────────────────────────┘
+
+2. BUTTON VISIBILITY LOGIC
+---------------------------
+```javascript
+const shouldShowMoveButton = (order) => {
+  return ['active', 'pending'].includes(order.status.toLowerCase());
+};
+
+const canMoveOrder = (userRole) => {
+  return ['TENANT_ADMIN', 'MANAGER', 'WAITER'].includes(userRole);
+};
+
+// Show button only if:
+// ✅ Order status is active or pending
+// ✅ User has permission (ADMIN/MANAGER/WAITER)
+// ❌ Hide for completed, cancelled, or merged orders
+```
+
+3. MOVE TABLE MODAL COMPONENT
+-----------------------------
+```jsx
+const MoveTableModal = ({ order, isOpen, onClose, tables }) => {
+  const [selectedTable, setSelectedTable] = useState('');
+  const [reason, setReason] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleMove = async () => {
+    if (!selectedTable) return;
+    
+    setLoading(true);
+    try {
+      const response = await moveOrderToTable(order.id, {
+        tableId: selectedTable,
+        reason: reason || 'Table change requested'
+      });
+      
+      // Success handling
+      toast.success(`Order moved to table ${selectedTable}`);
+      onClose();
+      refreshOrders(); // Refresh the orders list
+      
+    } catch (error) {
+      handleMoveError(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Modal isOpen={isOpen} onClose={onClose}>
+      <div className="move-table-modal">
+        <h3>Move Order to Different Table</h3>
+        
+        {/* Order Information */}
+        <div className="order-info">
+          <p><strong>Order ID:</strong> {order.id}</p>
+          <p><strong>Current Table:</strong> {order.tableNumber}</p>
+          <p><strong>Total Amount:</strong> ${order.total}</p>
+          <p><strong>Items:</strong> {order.items?.length || 0} items</p>
+        </div>
+
+        {/* Table Selection */}
+        <div className="table-selection">
+          <label>Select New Table:</label>
+          <select 
+            value={selectedTable} 
+            onChange={(e) => setSelectedTable(e.target.value)}
+            required
+          >
+            <option value="">Choose a table...</option>
+            {tables
+              .filter(table => table.id !== order.tableNumber) // Exclude current table
+              .map(table => (
+                <option key={table.id} value={table.id}>
+                  Table {table.number} ({table.seats} seats) 
+                  {table.status === 'occupied' ? ' - Occupied' : ' - Available'}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        {/* Reason Selection */}
+        <div className="reason-input">
+          <label>Reason for Move:</label>
+          <select 
+            value={reason} 
+            onChange={(e) => setReason(e.target.value)}
+          >
+            <option value="">Select reason...</option>
+            <option value="Customer requested">Customer requested</option>
+            <option value="Better seating area">Better seating area</option>
+            <option value="Larger table needed">Larger table needed</option>
+            <option value="Quieter area requested">Quieter area requested</option>
+            <option value="Table maintenance">Table maintenance</option>
+            <option value="Wrong table assigned">Wrong table assigned</option>
+            <option value="Group size changed">Group size changed</option>
+          </select>
+          
+          {/* Custom reason input */}
+          <input 
+            type="text" 
+            placeholder="Or enter custom reason..."
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            maxLength={200}
+          />
+        </div>
+
+        {/* Action Buttons */}
+        <div className="modal-actions">
+          <button onClick={onClose} disabled={loading} className="secondary">
+            Cancel
+          </button>
+          <button 
+            onClick={handleMove} 
+            disabled={!selectedTable || loading}
+            className="primary"
+          >
+            {loading ? 'Moving Order...' : 'Move to Table'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+```
+
+4. API INTEGRATION FUNCTION
+----------------------------
+```javascript
+const moveOrderToTable = async (orderId, { tableId, reason }) => {
+  const response = await fetch(`/api/v1/orders/${orderId}/move-table`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${getAuthToken()}`
+    },
+    body: JSON.stringify({
+      tableId,
+      reason
+    })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error?.message || 'Failed to move order');
+  }
+
+  return response.json();
+};
+```
+
+5. STATE MANAGEMENT
+-------------------
+After successful move, update your application state:
+
+```javascript
+const handleMoveSuccess = (response) => {
+  const { order: updatedOrder, moveDetails } = response.data;
+  
+  // Update orders list in state
+  setOrders(prevOrders => 
+    prevOrders.map(order => 
+      order.id === updatedOrder.id 
+        ? { 
+            ...order, 
+            tableNumber: updatedOrder.tableNumber,
+            tableId: updatedOrder.tableId,
+            updatedAt: updatedOrder.updatedAt
+          }
+        : order
+    )
+  );
+
+  // Update table occupancy if you track that
+  updateTableOccupancy(moveDetails.fromTable, moveDetails.toTable);
+  
+  // Show success notification
+  showNotification({
+    type: 'success',
+    title: 'Order Moved Successfully',
+    message: `Order moved from Table ${moveDetails.fromTable} to Table ${moveDetails.toTable}`,
+    duration: 3000
+  });
+
+  // Log for audit trail
+  console.log('Order moved:', moveDetails);
+};
+```
+
+6. ERROR HANDLING
+-----------------
+```javascript
+const handleMoveError = (error) => {
+  const errorMessages = {
+    'TABLE_NOT_FOUND': 'The selected table does not exist or is not available',
+    'SAME_TABLE': 'This order is already at the selected table',
+    'INVALID_ORDER_STATUS': 'This order cannot be moved (must be active or pending)',
+    'NOT_FOUND': 'Order not found',
+    'VALIDATION_ERROR': 'Please select a valid table'
+  };
+
+  const message = errorMessages[error.code] || error.message || 'Failed to move order';
+  
+  toast.error(message, {
+    duration: 5000,
+    position: 'top-right'
+  });
+  
+  // Log error for debugging
+  console.error('Move order error:', error);
+};
+```
+
+7. QUICK MOVE BUTTONS (OPTIONAL)
+---------------------------------
+For frequently used tables, add quick action buttons:
+
+```jsx
+const QuickMoveButtons = ({ order, popularTables }) => (
+  <div className="quick-move-section">
+    <span className="quick-move-label">Quick move to:</span>
+    <div className="quick-move-buttons">
+      {popularTables.map(table => (
+        <button
+          key={table.id}
+          onClick={() => quickMoveToTable(order.id, table.id)}
+          className="quick-move-btn"
+          title={`Move to Table ${table.number}`}
+        >
+          T{table.number}
+        </button>
+      ))}
+      <button 
+        onClick={() => openFullMoveModal(order)}
+        className="more-options-btn"
+      >
+        More Tables...
+      </button>
+    </div>
+  </div>
+);
+
+const quickMoveToTable = async (orderId, tableId) => {
+  try {
+    await moveOrderToTable(orderId, {
+      tableId,
+      reason: 'Quick move'
+    });
+    // Handle success
+  } catch (error) {
+    handleMoveError(error);
+  }
+};
+```
+
+8. UI/UX CONSIDERATIONS
+-----------------------
+
+Visual Indicators:
+- Use a location/move icon (📍 or ↗️) for the move button
+- Show loading spinner during move operation
+- Highlight the new table after successful move
+- Show confirmation toast message
+
+Accessibility:
+- Proper ARIA labels for screen readers
+- Keyboard navigation support
+- Focus management for modals
+- Clear error messages
+
+Mobile Responsive:
+- Ensure modal works well on mobile devices
+- Touch-friendly button sizes
+- Appropriate spacing for tablet/mobile
+
+9. INTEGRATION CHECKLIST
+-------------------------
+
+Backend Integration:
+□ API endpoint is accessible from frontend
+□ JWT authentication is working
+□ Error responses are handled properly
+□ CORS is configured if needed
+
+State Management:
+□ Order list updates after move
+□ Table occupancy updates (if tracked)
+□ User notifications display correctly
+□ Loading states work properly
+
+UI Components:
+□ Move button appears on eligible orders
+□ Modal opens and closes correctly
+□ Table selection dropdown populates
+□ Form validation works
+□ Success/error messages display
+
+Permissions:
+□ Only authorized users see move button
+□ API rejects unauthorized requests
+□ Role-based access control works
+
+Testing:
+□ Test moving between different tables
+□ Test error scenarios (invalid table, same table)
+□ Test with different user roles
+□ Test on mobile and desktop
+
+10. SAMPLE USAGE SCENARIOS
+--------------------------
+
+Scenario 1: Customer Request
+- Customer at Table 5 wants to move to Table 12 (quieter area)
+- Waiter clicks "Move Table" on the order
+- Selects Table 12, reason: "Customer requested quieter area"
+- Order moves, customer continues meal at new table
+
+Scenario 2: Restaurant Management
+- Large group arrives, needs bigger table
+- Manager moves order from 4-seat table to 8-seat table
+- Reason: "Larger table needed for group size"
+
+Scenario 3: Waiter Correction
+- Order was accidentally assigned to wrong table
+- Waiter quickly moves it to correct table
+- Reason: "Wrong table assigned initially"
+
+11. TROUBLESHOOTING
+-------------------
+
+Common Issues:
+1. "Table not found" error
+   - Ensure table exists in database
+   - Check table ID format (some use IDs, others use numbers)
+
+2. "Same table" error
+   - Check if order is already at selected table
+   - Refresh order data before moving
+
+3. "Invalid order status" error
+   - Only active/pending orders can be moved
+   - Check order status before showing move button
+
+4. Permission denied
+   - Verify user role has move permissions
+   - Check JWT token validity
+
+Debug Steps:
+1. Check browser console for API errors
+2. Verify request payload format
+3. Test API endpoint directly with curl/Postman
+4. Check server logs for detailed error messages
+
+SUMMARY
+=======
+The Move Table functionality provides a simple way to relocate orders between tables without 
+affecting order content or totals. Implementation requires:
+
+1. Move button on each eligible order
+2. Table selection modal with reason input
+3. API integration with proper error handling
+4. State updates after successful moves
+5. User notifications and feedback
+6. Permission-based access control
+
+This feature enhances restaurant management flexibility and improves customer service by 
+allowing quick table changes when needed.

@@ -1,0 +1,244 @@
+VALIDATE MERGE - COMPLETE IMPLEMENTATION GUIDE
+===============================================
+
+API ENDPOINT
+============
+POST /api/v1/orders/validate-merge
+
+HEADERS
+=======
+Content-Type: application/json
+Authorization: Bearer YOUR_JWT_TOKEN
+
+
+REQUEST BODY
+===========
+{
+  "sourceOrderIds": ["order_123", "order_456"],
+  "targetOrderId": "order_123",  // Optional: specify which order to merge into
+  "mergeStrategy": "append",      // "append" or "create_new"
+  "tableId": "table_1"           // Optional: specify target table
+}
+
+MERGE STRATEGIES
+===============
+
+1. APPEND STRATEGY (mergeStrategy: "append")
+   - One of the source orders becomes the target order
+   - All other orders' items are appended to the target order
+   - The target order remains in its original table as an ACTIVE order (visible in orders list)
+   - Source orders (except the target) are marked as "merged" and disappear
+   - Use when you want to keep one order and add others to it
+
+2. CREATE NEW STRATEGY (mergeStrategy: "create_new" or default)
+   - Creates a completely new order
+   - All source orders' items are moved to the new order
+   - Source orders are marked as "merged" and disappear
+   - The new order remains as an ACTIVE order
+   - Use when you want a fresh start with a new order
+
+FRONTEND IMPLEMENTATION
+======================
+
+1. Basic Function
+-----------------
+const validateMerge = async (sourceOrderIds: string[]) => {
+  try {
+    const response = await fetch("/api/v1/orders/validate-merge", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify({ sourceOrderIds }),
+    });
+
+    const data = await response.json();
+    
+    if (data.success) {
+      return data.data;
+    } else {
+      throw new Error(data.error?.message || "Validation failed");
+    }
+  } catch (error) {
+    console.error("Validate merge error:", error);
+    throw error;
+  }
+};
+
+2. Get Token Function
+--------------------
+const getToken = () => {
+  return localStorage.getItem('authToken') || sessionStorage.getItem('authToken');
+};
+
+3. Usage Example
+---------------
+const handleValidateMerge = async () => {
+  try {
+    const sourceOrderIds = ["order_1754474906125_5z5yo", "order_1754474921725_abc123"];
+    const result = await validateMerge(sourceOrderIds);
+    
+    console.log("Can merge:", result.canMerge);
+    console.log("Restrictions:", result.restrictions);
+    console.log("Warnings:", result.warnings);
+    console.log("Preview:", result.preview);
+  } catch (error) {
+    console.error("Validation failed:", error);
+  }
+};
+
+// Append Strategy Example
+const handleAppendMerge = async () => {
+  try {
+    const mergeData = {
+      sourceOrderIds: ["order_1", "order_2"],
+      targetOrderId: "order_1",  // order_1 will remain, order_2 items will be added to it
+      mergeStrategy: "append",
+      tableId: "table_1"
+    };
+    
+    const response = await fetch("/api/v1/orders/merge", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${getToken()}`,
+      },
+      body: JSON.stringify(mergeData),
+    });
+    
+    const result = await response.json();
+    console.log("Merge result:", result);
+  } catch (error) {
+    console.error("Merge failed:", error);
+  }
+};
+
+EXPECTED RESPONSE
+================
+{
+  "success": true,
+  "data": {
+    "canMerge": true,
+    "restrictions": [],
+    "warnings": [],
+    "preview": {
+      "mergedOrder": {
+        "id": "merged_123",
+        "orderNumber": "MERGED-123",
+        "customerName": "Walk-in Customer",
+        "totalAmount": 42,
+        "status": "active",
+        "tableNumber": "table_1754127535768_loqut"
+      },
+      "totalAmount": 42,
+      "itemCount": 0
+    }
+  }
+}
+
+ERROR RESPONSES
+==============
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Source order IDs are required"
+  }
+}
+
+{
+  "success": false,
+  "error": {
+    "code": "NOT_FOUND",
+    "message": "One or more orders not found"
+  }
+}
+
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_ORDERS",
+    "message": "One or more orders cannot be merged"
+  }
+}
+
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_ORDERS",
+    "message": "One or more orders cannot be merged"
+  }
+}
+
+TEST COMMANDS
+============
+
+1. Test with curl:
+curl -X POST "http://localhost:5050/api/v1/orders/validate-merge" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjJmNzIxN2E5LWI0NjEtNDI5Mi1iODIxLWE0MjczOTVlY2VmZiIsImVtYWlsIjoibWFkcmlkaXN0YWJpc3dhc2hAZ21haWwuY29tIiwicm9sZSI6IlRFTkFOVF9BRE1JTiIsInRlbmFudElkIjoiNmU4YmE3MjAtZjdmNS00MzUyLTkxZDktMzY1NjMyY2ZhZjYwIiwiaWF0IjoxNzU0NDA3MDY2LCJleHAiOjE3NTQ0OTM0NjZ9.lhvVYFa23XDZBZ0r3dotTRlyBdgKd1XRX9EWUQ4-pNQ" \
+  -d '{"sourceOrderIds":["order_1754474906125_5z5yo"]}'
+
+2. Test with JavaScript:
+const testValidateMerge = async () => {
+  const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjJmNzIxN2E5LWI0NjEtNDI5Mi1iODIxLWE0MjczOTVlY2VmZiIsImVtYWlsIjoibWFkcmlkaXN0YWJpc3dhc2hAZ21haWwuY29tIiwicm9sZSI6IlRFTkFOVF9BRE1JTiIsInRlbmFudElkIjoiNmU4YmE3MjAtZjdmNS00MzUyLTkxZDktMzY1NjMyY2ZhZjYwIiwiaWF0IjoxNzU0NDA3MDY2LCJleHAiOjE3NTQ0OTM0NjZ9.lhvVYFa23XDZBZ0r3dotTRlyBdgKd1XRX9EWUQ4-pNQ";
+  
+  const response = await fetch("/api/v1/orders/validate-merge", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+    body: JSON.stringify({ 
+      sourceOrderIds: ["order_1754474906125_5z5yo"] 
+    }),
+  });
+  
+  const data = await response.json();
+  console.log("Response:", data);
+};
+
+COMMON ISSUES & SOLUTIONS
+=========================
+
+1. 401 Unauthorized
+   - Check if token is valid and not expired
+   - Make sure Authorization header is sent correctly
+   - Verify token format: "Bearer <token>"
+
+2. 404 Not Found
+   - Verify URL is correct: /api/v1/orders/validate-merge
+   - Check if server is running on correct port
+   - Ensure route is properly registered
+
+3. "One or more orders not found"
+   - Make sure order IDs exist in database
+   - Check if order IDs are from same tenant
+   - Verify order IDs are correct format
+
+4. "Orders must be in active status"
+   - Only orders with "active" or "pending" status can be merged
+   - Cannot merge paid or cancelled orders
+   - Check order status before attempting merge
+
+5. "Orders can be merged from any table"
+   - Orders from different tables can now be merged
+   - The merged order will show "MULTI-TABLE" in the tableNumber field
+
+VALIDATION RULES
+===============
+1. At least 2 orders must be selected
+2. All orders must exist in database
+3. All orders must be from same tenant
+4. Orders can be merged from any table (table restriction removed)
+5. All orders must have "active" or "pending" status
+6. Cannot merge already merged orders
+7. Cannot merge paid or cancelled orders
+
+SUCCESS CRITERIA
+===============
+- canMerge: true
+- restrictions: [] (empty array)
+- warnings: [] (empty array or contains warnings only)
+- preview: contains merged order preview 

@@ -9,15 +9,27 @@ export class DatabaseError extends Error {
   }
 }
 
-// Get a client from the pool
+// Get a client from the pool with retry logic
 export const getClient = async (): Promise<PoolClient> => {
-  try {
-    const client = await pool.connect();
-    return client;
-  } catch (error) {
-    logger.error("Database connection error:", error);
-    throw new DatabaseError("Database connection failed", "CONNECTION_ERROR");
+  const maxRetries = 3;
+  let lastError: any;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const client = await pool.connect();
+      return client;
+    } catch (error) {
+      lastError = error;
+      logger.error(`Database connection attempt ${attempt} failed:`, error);
+      
+      if (attempt < maxRetries) {
+        // Wait before retrying (exponential backoff)
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 100));
+      }
+    }
   }
+  
+  throw new DatabaseError("Database connection failed after retries", "CONNECTION_ERROR");
 };
 
 // Generic find by ID with tenant check
@@ -28,7 +40,9 @@ export const findById = async (
 ) => {
   const client = await getClient();
   try {
-    const query = `SELECT * FROM "${tableName}" WHERE id = $1 AND "tenantId" = $2`;
+    // Handle different tenant column names
+    const tenantColumn = tableName === "menuItems" ? '"tenantId"' : "tenantid";
+    const query = `SELECT * FROM "${tableName}" WHERE id = $1 AND ${tenantColumn} = $2`;
     const result = await client.query(query, [id, tenantId]);
 
     if (result.rows.length === 0) {
@@ -55,8 +69,9 @@ export const createWithCheck = async (
 ) => {
   const client = await getClient();
   try {
-    // Check for duplicates
-    const checkQuery = `SELECT id FROM "${tableName}" WHERE ${checkField} = $1 AND "tenantId" = $2`;
+    // Check for duplicates - handle different tenant column names
+    const tenantColumn = tableName === "menuItems" ? '"tenantId"' : "tenantid";
+    const checkQuery = `SELECT id FROM "${tableName}" WHERE ${checkField} = $1 AND ${tenantColumn} = $2`;
     const checkResult = await client.query(checkQuery, [checkValue, tenantId]);
 
     if (checkResult.rows.length > 0) {
@@ -67,9 +82,19 @@ export const createWithCheck = async (
     const fields = Object.keys(data);
     const values = Object.values(data);
     const placeholders = values.map((_, index) => `$${index + 1}`).join(", ");
-    const fieldNames = fields.map((field) => field).join(", ");
+    const fieldNames = fields.map((field) => `"${field}"`).join(", ");
 
     const insertQuery = `INSERT INTO "${tableName}" (${fieldNames}) VALUES (${placeholders}) RETURNING *`;
+
+    // DEBUG: Log the query being built
+    console.log("=== DATABASE INSERT DEBUG ===");
+    console.log("Table:", tableName);
+    console.log("Fields:", fields);
+    console.log("Field Names (quoted):", fieldNames);
+    console.log("Insert Query:", insertQuery);
+    console.log("Values:", values);
+    console.log("=============================");
+
     const result = await client.query(insertQuery, values);
 
     return result.rows[0];
@@ -95,12 +120,14 @@ export const updateWithCheck = async (
     const fields = Object.keys(data);
     const values = Object.values(data);
     const setClause = fields
-      .map((field, index) => `${field} = $${index + 1}`)
+      .map((field, index) => `"${field}" = $${index + 1}`)
       .join(", ");
 
+    // Handle different tenant column names
+    const tenantColumn = tableName === "menuItems" ? '"tenantId"' : "tenantid";
     const updateQuery = `UPDATE "${tableName}" SET ${setClause} WHERE id = $${
       values.length + 1
-    } AND "tenantId" = $${values.length + 2} RETURNING *`;
+    } AND ${tenantColumn} = $${values.length + 2} RETURNING *`;
     const result = await client.query(updateQuery, [...values, id, tenantId]);
 
     if (result.rows.length === 0) {
@@ -137,7 +164,9 @@ export const deleteWithCheck = async (
       }
     }
 
-    const deleteQuery = `DELETE FROM "${tableName}" WHERE id = $1 AND "tenantId" = $2`;
+    // Handle different tenant column names
+    const tenantColumn = tableName === "menuItems" ? '"tenantId"' : "tenantid";
+    const deleteQuery = `DELETE FROM "${tableName}" WHERE id = $1 AND ${tenantColumn} = $2`;
     const result = await client.query(deleteQuery, [id, tenantId]);
 
     if (result.rowCount === 0) {
@@ -202,6 +231,15 @@ export const executeQuery = async (query: string, values: any[] = []) => {
   } finally {
     client.release();
   }
+};
+
+// Get pool status for monitoring
+export const getPoolStatus = () => {
+  return {
+    total: pool.totalCount,
+    idle: pool.idleCount,
+    waiting: pool.waitingCount,
+  };
 };
 
 // Close the pool

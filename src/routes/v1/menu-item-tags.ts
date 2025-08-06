@@ -112,7 +112,7 @@ router.post("/:menuItemId", async (req: Request, res: Response) => {
       .toString(36)
       .substr(2, 5)}`;
     const insertQuery = `
-      INSERT INTO "menuItemTags" (id, "menuItemId", "tagId", createdAt)
+      INSERT INTO "menuItemTags" (id, "menuItemId", "tagId", createdat)
       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
       RETURNING *
     `;
@@ -124,7 +124,7 @@ router.post("/:menuItemId", async (req: Request, res: Response) => {
 
     // Get the full tag details for response
     const fullTagQuery = `
-      SELECT mt.id, mt.name, mt.description, mt.color, mit.createdAt as assignedAt
+      SELECT mt.id, mt.name, mt.description, mt.color, mit.createdat as assignedAt
       FROM "menuItemTags" mit
       JOIN menuTags mt ON mit."tagId" = mt.id
       WHERE mit.id = $1
