@@ -39,6 +39,7 @@ import ingredientAllergensRoutes from "./routes/v1/ingredient-allergens";
 import menuItemIngredientsRoutes from "./routes/v1/menu-item-ingredients";
 import menuTagsRoutes from "./routes/v1/menu-tags";
 import menuItemTagsRoutes from "./routes/v1/menu-item-tags";
+import promotionsRoutes from "./routes/v1/promotions";
 
 // Import public routes for QR ordering
 import publicMenuRoutes from "./routes/v1/public-menu";
@@ -321,6 +322,12 @@ app.use(
   authenticateToken,
   tenantMiddleware,
   menuItemTagsRoutes
+);
+app.use(
+  `/api/${apiVersion}/promotions`,
+  authenticateToken,
+  tenantMiddleware,
+  promotionsRoutes
 );
 
 // Error handling middleware

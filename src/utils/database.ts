@@ -49,7 +49,7 @@ export const findById = async (
   const client = await getClient();
   try {
     // Handle different tenant column names
-    const tenantColumn = tableName === "menuItems" ? '"tenantId"' : "tenantid";
+    const tenantColumn = '"tenantId"'; // All tables use quoted camelCase "tenantId";
     const query = `SELECT * FROM "${tableName}" WHERE id = $1 AND ${tenantColumn} = $2`;
     const result = await client.query(query, [id, tenantId]);
 
@@ -78,7 +78,7 @@ export const createWithCheck = async (
   const client = await getClient();
   try {
     // Check for duplicates - handle different tenant column names
-    const tenantColumn = tableName === "menuItems" ? '"tenantId"' : "tenantid";
+    const tenantColumn = '"tenantId"'; // All tables use quoted camelCase "tenantId"
     const checkQuery = `SELECT id FROM "${tableName}" WHERE ${checkField} = $1 AND ${tenantColumn} = $2`;
     const checkResult = await client.query(checkQuery, [checkValue, tenantId]);
 
@@ -132,7 +132,7 @@ export const updateWithCheck = async (
       .join(", ");
 
     // Handle different tenant column names
-    const tenantColumn = tableName === "menuItems" ? '"tenantId"' : "tenantid";
+    const tenantColumn = '"tenantId"'; // All tables use quoted camelCase "tenantId";
     const updateQuery = `UPDATE "${tableName}" SET ${setClause} WHERE id = $${
       values.length + 1
     } AND ${tenantColumn} = $${values.length + 2} RETURNING *`;
@@ -173,7 +173,7 @@ export const deleteWithCheck = async (
     }
 
     // Handle different tenant column names
-    const tenantColumn = tableName === "menuItems" ? '"tenantId"' : "tenantid";
+    const tenantColumn = '"tenantId"'; // All tables use quoted camelCase "tenantId";
     const deleteQuery = `DELETE FROM "${tableName}" WHERE id = $1 AND ${tenantColumn} = $2`;
     const result = await client.query(deleteQuery, [id, tenantId]);
 
