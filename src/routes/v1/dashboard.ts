@@ -654,18 +654,26 @@ router.get(
       const { limit = 5 } = req.query;
 
       const combinationsQuery = `
+      WITH order_combinations AS (
+        SELECT 
+          o.id,
+          STRING_AGG(mi.name, ' + ' ORDER BY mi.name) as combination,
+          COUNT(DISTINCT oi."menuItemId") as item_count,
+          SUM(oi."totalPrice") as order_revenue
+        FROM orders o
+        JOIN "orderItems" oi ON o.id = oi."orderId"
+        JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+        WHERE o."tenantId" = $1 
+          AND o.status != 'cancelled'
+        GROUP BY o.id
+        HAVING COUNT(DISTINCT oi."menuItemId") = 2
+      )
       SELECT 
-        o.id as order_id,
-        STRING_AGG(mi.name, ' + ' ORDER BY mi.name) as combination,
+        combination,
         COUNT(*) as combination_count,
-        SUM(oi."totalPrice") as total_revenue
-      FROM orders o
-      JOIN "orderItems" oi ON o.id = oi."orderId"
-      JOIN "menuItems" mi ON oi."menuItemId" = mi.id
-      WHERE o."tenantId" = $1 
-        AND o.status != 'cancelled'
-      GROUP BY o.id
-      HAVING COUNT(*) = 2
+        SUM(order_revenue) as total_revenue
+      FROM order_combinations
+      GROUP BY combination
       ORDER BY combination_count DESC, total_revenue DESC
       LIMIT $2
     `;
@@ -677,7 +685,7 @@ router.get(
 
       const combinations = rows.map((row: any) => ({
         combination: row.combination,
-        orderCount: parseInt(row.combination_count),
+        orderCount: parseInt(row.combination_count), // How many times this combination was ordered
         revenue: parseFloat(row.total_revenue),
       }));
 
