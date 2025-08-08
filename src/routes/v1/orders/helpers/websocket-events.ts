@@ -5,7 +5,14 @@ import { logger } from "../../../../utils/logger";
 
 export function emitNewOrderEvent(tenantId: string, formattedOrder: any): void {
   try {
-    socketManager.emitNewOrder(tenantId, formattedOrder);
+    // Only emit for active orders
+    if (formattedOrder.status === "active") {
+      socketManager.emitNewOrder(tenantId, formattedOrder);
+    } else {
+      logger.info(
+        `Skipping WebSocket notification for order ${formattedOrder.orderNumber} with status ${formattedOrder.status}`
+      );
+    }
   } catch (error) {
     logger.error("Failed to emit WebSocket event:", error);
     // Don't fail the order creation if WebSocket fails

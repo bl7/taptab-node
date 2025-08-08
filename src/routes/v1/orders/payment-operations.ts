@@ -42,16 +42,24 @@ router.put(
 
       const user = (req as any).user;
 
-      // Update order payment status
-      await executeQuery(
-        `UPDATE orders SET 
-        "paymentStatus" = $1, 
-        "paymentMethod" = $2, 
-        "paidByUserId" = $3, 
-        "paidAt" = $4, 
-        "updatedAt" = $5 
-       WHERE id = $6`,
-        ["PAID", paymentMethod, user?.id || paidBy, new Date(), new Date(), id]
+      // Update order status
+      const updateResult = await executeQuery(
+        `UPDATE orders 
+         SET "paymentStatus" = $1,
+             "paymentMethod" = $2,
+             "paidByUserId" = $3,
+             "paidAt" = $4,
+             "updatedAt" = $5
+         WHERE id = $6 AND "tenantId" = $7`,
+        [
+          "PAID",
+          paymentMethod,
+          user?.id || paidBy,
+          new Date(),
+          new Date(),
+          id,
+          tenantId,
+        ]
       );
 
       // Get order with items for notification
@@ -60,10 +68,7 @@ router.put(
         [id]
       );
 
-      const formattedOrder = {
-        ...formatOrderFromRows(orderWithItemsResult.rows),
-        status: "paid", // Override status to show as paid
-      };
+      const order = formatOrderFromRows(orderWithItemsResult.rows);
 
       // Emit WebSocket event for order payment
       try {
@@ -71,6 +76,15 @@ router.put(
           user?.firstName && user?.lastName
             ? `${user.firstName} ${user.lastName}`
             : user?.id || paidBy || "Unknown";
+
+        // Format order for response
+        const formattedOrder = {
+          ...order,
+          paymentStatus: "PAID",
+          paymentMethod: paymentMethod,
+          paidBy: paidByUser,
+          paidAt: new Date(),
+        };
 
         // socketManager.emitOrderPaid(tenantId, formattedOrder, paymentMethod, paidByUser);
         // TODO: Implement emitOrderPaid method in SocketManager if needed

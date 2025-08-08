@@ -27,6 +27,9 @@ export function formatOrderFromRows(orderRows: any[]): any {
       firstRow.finalAmount?.toString() || firstRow.totalAmount?.toString() || 0
     ),
     status: firstRow.status.toLowerCase(),
+    paymentStatus: firstRow.paymentStatus || firstRow.paymentstatus || null,
+    paymentMethod: firstRow.paymentMethod || firstRow.paymentmethod || null,
+    paidAt: firstRow.paidAt || null,
     waiterId: firstRow.createdById,
     waiterName:
       firstRow.createdByUserName ||
@@ -64,6 +67,9 @@ export function formatOrdersFromRows(rows: any[]): any[] {
         items: [],
         total: parseFloat(row.finalAmount.toString()),
         status: row.status.toLowerCase(),
+        paymentStatus: row.paymentStatus || row.paymentstatus || null,
+        paymentMethod: row.paymentMethod || row.paymentmethod || null,
+        paidAt: row.paidAt || null,
         waiterId: row.createdById,
         waiterName:
           row.createdByUserName ||

@@ -1,6 +1,6 @@
-import { Server as SocketIOServer } from 'socket.io';
-import { Server as HTTPServer } from 'http';
-import { logger } from './logger';
+import { Server as SocketIOServer } from "socket.io";
+import { Server as HTTPServer } from "http";
+import { logger } from "./logger";
 
 interface AuthenticatedSocket {
   userId: string;
@@ -21,74 +21,93 @@ class SocketManager {
     this.io = new SocketIOServer(server, {
       cors: {
         origin: true, // Allow all origins
-        methods: ['GET', 'POST'],
-        credentials: true
-      }
+        methods: ["GET", "POST"],
+        credentials: true,
+      },
     });
 
-    this.io.on('connection', (socket) => {
+    this.io.on("connection", (socket) => {
       logger.info(`Socket connected: ${socket.id}`);
 
       // Handle authentication
-      socket.on('authenticate', (data: { token: string }) => {
+      socket.on("authenticate", (data: { token: string }) => {
         try {
           // Verify JWT token and extract user info
-          const jwt = require('jsonwebtoken');
-          const decoded = jwt.verify(data.token, process.env['JWT_SECRET']);
-          
+          const jwt = require("jsonwebtoken");
+          const decoded = jwt.verify(data.token, process.env["JWT_SECRET"]);
+
           const userInfo: AuthenticatedSocket = {
             userId: decoded.id,
             userRole: decoded.role,
-            tenantId: decoded.tenantId
+            tenantId: decoded.tenantId,
           };
 
           this.authenticatedSockets.set(socket.id, userInfo);
-          
+
           // Join tenant-specific room
           socket.join(`tenant_${userInfo.tenantId}`);
-          
+
           // Join role-specific room for printing
-          if (userInfo.userRole === 'TENANT_ADMIN' || userInfo.userRole === 'KITCHEN') {
+          if (
+            userInfo.userRole === "TENANT_ADMIN" ||
+            userInfo.userRole === "KITCHEN"
+          ) {
             socket.join(`print_${userInfo.tenantId}`);
-            logger.info(`User ${userInfo.userId} (${userInfo.userRole}) joined print room for tenant ${userInfo.tenantId}`);
+            logger.info(
+              `User ${userInfo.userId} (${userInfo.userRole}) joined print room for tenant ${userInfo.tenantId}`
+            );
           }
 
-          socket.emit('authenticated', { success: true });
-          logger.info(`Socket ${socket.id} authenticated as ${userInfo.userRole}`);
+          socket.emit("authenticated", { success: true });
+          logger.info(
+            `Socket ${socket.id} authenticated as ${userInfo.userRole}`
+          );
         } catch (error) {
-          logger.error('Socket authentication failed:', error);
-          socket.emit('authentication_error', { message: 'Invalid token' });
+          logger.error("Socket authentication failed:", error);
+          socket.emit("authentication_error", { message: "Invalid token" });
         }
       });
 
-      socket.on('disconnect', () => {
+      socket.on("disconnect", () => {
         this.authenticatedSockets.delete(socket.id);
         logger.info(`Socket disconnected: ${socket.id}`);
       });
     });
 
-    logger.info('Socket.IO server initialized');
+    logger.info("Socket.IO server initialized");
   }
 
   // Emit new order to admin and kitchen staff only
   emitNewOrder(tenantId: string, orderData: any) {
+    logger.info(
+      `🔍 SocketManager.emitNewOrder called with tenantId: ${tenantId}`
+    );
+    logger.info(`📦 Order data received:`, orderData);
+
     if (!this.io) {
-      logger.error('Socket.IO not initialized');
+      logger.error("❌ Socket.IO not initialized");
       return;
     }
 
-    const notificationId = `new_order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+    logger.info(`✅ Socket.IO is initialized, proceeding with emission`);
+
+    const notificationId = `new_order_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
     const notificationData = {
-      type: 'PRINT_RECEIPT',
+      type: "PRINT_RECEIPT",
       order: orderData,
       notificationId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
-    // Emit to all users (same as test notification)
-    this.io.emit('newOrder', notificationData);
+    logger.info(`📡 About to emit 'newOrder' event to all connected clients`);
 
+    // Emit to all users (same as test notification)
+    this.io.emit("newOrder", notificationData);
+
+    logger.info(`✅ Event emitted successfully`);
     logger.info(`=== NEW ORDER NOTIFICATION TRIGGERED ===`);
     logger.info(`Event: newOrder`);
     logger.info(`Type: PRINT_RECEIPT`);
@@ -96,42 +115,64 @@ class SocketManager {
     logger.info(`Tenant ID: ${tenantId}`);
     logger.info(`Order ID: ${orderData.id}`);
     logger.info(`Notification data:`, notificationData);
-    
+
     // Log connected users for debugging
     const connectedUsers = this.getConnectedUsers();
     logger.info(`Connected users:`, connectedUsers);
   }
 
   // Emit order modification with complete order and changes for receipt
-  emitOrderModificationReceipt(tenantId: string, orderData: any, changes: {
-    addedItems?: Array<{name: string, quantity: number, price: number, notes?: string}>,
-    removedItems?: Array<{name: string, quantity: number, price: number, reason?: string}>,
-    modifiedItems?: Array<{name: string, oldQuantity: number, newQuantity: number, price: number, notes?: string}>,
-    modificationType: 'add' | 'remove' | 'modify' | 'mixed',
-    modifiedBy: string,
-    reason?: string
-  }) {
-    logger.info('emitOrderModificationReceipt called');
-    
+  emitOrderModificationReceipt(
+    tenantId: string,
+    orderData: any,
+    changes: {
+      addedItems?: Array<{
+        name: string;
+        quantity: number;
+        price: number;
+        notes?: string;
+      }>;
+      removedItems?: Array<{
+        name: string;
+        quantity: number;
+        price: number;
+        reason?: string;
+      }>;
+      modifiedItems?: Array<{
+        name: string;
+        oldQuantity: number;
+        newQuantity: number;
+        price: number;
+        notes?: string;
+      }>;
+      modificationType: "add" | "remove" | "modify" | "mixed";
+      modifiedBy: string;
+      reason?: string;
+    }
+  ) {
+    logger.info("emitOrderModificationReceipt called");
+
     if (!this.io) {
-      logger.error('Socket.IO not initialized');
+      logger.error("Socket.IO not initialized");
       return;
     }
 
-    const notificationId = `modified_order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+    const notificationId = `modified_order_${Date.now()}_${Math.random()
+      .toString(36)
+      .substr(2, 9)}`;
+
     const notificationData = {
-      type: 'PRINT_MODIFIED_RECEIPT',
+      type: "PRINT_MODIFIED_RECEIPT",
       order: orderData,
       changes,
       notificationId,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     };
 
-    logger.info('About to emit orderModified event');
+    logger.info("About to emit orderModified event");
     // Emit to all users
-    this.io.emit('orderModified', notificationData);
-    logger.info('orderModified event emitted');
+    this.io.emit("orderModified", notificationData);
+    logger.info("orderModified event emitted");
 
     logger.info(`=== ORDER MODIFICATION NOTIFICATION TRIGGERED ===`);
     logger.info(`Event: orderModified`);
@@ -150,11 +191,11 @@ class SocketManager {
     this.authenticatedSockets.forEach((userInfo, socketId) => {
       users.push({
         socketId,
-        ...userInfo
+        ...userInfo,
       });
     });
     return users;
   }
 }
 
-export const socketManager = new SocketManager(); 
+export const socketManager = new SocketManager();

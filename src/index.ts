@@ -45,10 +45,24 @@ import promotionsRoutes from "./routes/v1/promotions";
 import publicMenuRoutes from "./routes/v1/public-menu";
 import publicTableRoutes from "./routes/v1/public-tables";
 import publicOrderRoutes from "./routes/v1/public-orders";
+import publicTenantRoutes from "./routes/v1/public-tenant";
+
+// Import Stripe payment routes
+import stripePaymentRoutes from "./routes/v1/stripe-payments";
+
+// Import admin cleanup routes
+import adminCleanupRoutes from "./routes/v1/admin-cleanup";
+
+// Import test routes
+import testWebsocketRoutes from "./routes/v1/test-websocket";
+
+// Import debug routes
+import debugRoutes from "./routes/v1/debug-order";
 
 // Import services
 import { logger } from "./utils/logger";
 import { socketManager } from "./utils/socket";
+import { CleanupService } from "./utils/cleanup";
 
 // Debug: Check if env vars are loaded
 console.log("DATABASE_URL exists:", !!process.env["DATABASE_URL"]);
@@ -150,6 +164,13 @@ app.use(
     stream: { write: (message) => logger.info(message.trim()) },
   })
 );
+// Raw body middleware for Stripe webhooks (tenant-specific)
+app.use(
+  "/api/v1/webhooks/stripe/:tenantId",
+  express.raw({ type: "application/json" })
+);
+
+// Regular JSON parsing for other routes
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
@@ -239,6 +260,7 @@ app.post("/api/debug/test-notification", (req, res) => {
 app.use(`/api/${apiVersion}/public/menu`, publicMenuRoutes);
 app.use(`/api/${apiVersion}/public/tables`, publicTableRoutes);
 app.use(`/api/${apiVersion}/public/orders`, publicOrderRoutes);
+app.use(`/api/${apiVersion}/public`, publicTenantRoutes);
 
 // Authenticated routes for admin/staff use (with authentication)
 app.use(`/api/${apiVersion}/auth`, authRoutes);
@@ -330,6 +352,18 @@ app.use(
   promotionsRoutes
 );
 
+// Stripe payment routes
+app.use(`/api/${apiVersion}`, stripePaymentRoutes);
+
+// Admin cleanup routes
+app.use(`/api/${apiVersion}/admin/cleanup`, adminCleanupRoutes);
+
+// Test routes
+app.use(`/api/${apiVersion}/test`, testWebsocketRoutes);
+
+// Debug routes
+app.use(`/api/${apiVersion}/debug`, debugRoutes);
+
 // Error handling middleware
 app.use(notFoundHandler);
 app.use(errorHandler);
@@ -382,6 +416,26 @@ const startServer = async () => {
       logger.info(`📈 Metrics: http://localhost:${PORT}/metrics`);
       logger.info(`🔌 WebSocket: ws://localhost:${PORT}`);
     });
+
+    // Set up cleanup cron job for abandoned pending orders
+    const cron = require("node-cron");
+
+    // Run cleanup every 15 minutes
+    cron.schedule("*/15 * * * *", async () => {
+      try {
+        logger.info(
+          "🕐 Running scheduled cleanup of abandoned pending orders..."
+        );
+        const cleanedCount = await CleanupService.cleanupPendingOrders(30); // 30 minutes
+        logger.info(
+          `✅ Cleanup completed. Cancelled ${cleanedCount} abandoned orders.`
+        );
+      } catch (error) {
+        logger.error("❌ Error during scheduled cleanup:", error);
+      }
+    });
+
+    logger.info("⏰ Scheduled cleanup job initialized (runs every 15 minutes)");
   } catch (error) {
     logger.error("Failed to start server:", error);
     console.error("Full error:", error);

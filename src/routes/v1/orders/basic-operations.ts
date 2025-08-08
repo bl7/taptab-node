@@ -40,6 +40,7 @@ router.get(
              o."isDelivery", o."deliveryAddress", o."deliveryPlatform", o."deliveryOrderId",
              o."customerAddress", 
              o."estimatedDeliveryTime", o."specialInstructions",
+             o."paymentStatus" as "paymentStatus", o."paymentMethod" as "paymentMethod", o."paidAt" as "paidAt",
              u."firstName" as waiter_first_name, u."lastName" as waiter_last_name
       FROM orders o
       LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
@@ -102,7 +103,7 @@ router.post(
         return sendError(
           res,
           "VALIDATION_ERROR",
-          "TableId and items array are required",
+          "Table ID and items array are required",
           400
         );
       }
@@ -161,11 +162,11 @@ router.post(
       const orderResult = await executeQuery(
         `INSERT INTO orders (
         id, "orderNumber", "tableNumber", "totalAmount", "taxAmount", "discountAmount", "finalAmount", 
-        "tenantId", "createdById", status, "orderSource", "sourceDetails", 
+        "tenantId", "createdById", status, "paymentStatus", "paymentMethod", "orderSource", "sourceDetails", 
         "customerName", "customerPhone", "notes", "isDelivery", "deliveryAddress", "deliveryPlatform", 
         "deliveryOrderId", "createdByUserId", "createdByUserName", "customerAddress", 
         "estimatedDeliveryTime", "specialInstructions", "createdAt", "updatedAt"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26) RETURNING *`,
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28) RETURNING *`,
         [
           generateOrderId(),
           orderNumber,
@@ -176,7 +177,9 @@ router.post(
           finalAmount,
           tenantId,
           user?.id || null,
-          "ACTIVE",
+          "active", // Order is active and visible
+          "pending", // Payment not yet processed
+          null, // Payment method will be set when payment is taken
           finalOrderSource,
           sourceDetails,
           customerName || null,
@@ -231,8 +234,14 @@ router.post(
 
       const formattedOrder = formatOrderFromRows(orderWithItemsResult.rows);
 
-      // Emit WebSocket event for admin and kitchen staff
-      emitNewOrderEvent(tenantId, formattedOrder);
+      // Emit WebSocket event for admin and kitchen staff only for active orders
+      if (formattedOrder.status === "active") {
+        emitNewOrderEvent(tenantId, formattedOrder);
+      } else {
+        logger.info(
+          `Order ${formattedOrder.orderNumber} created with status ${formattedOrder.status} - WebSocket notification will be sent when order becomes active`
+        );
+      }
 
       logger.info(
         `Order created: ${order.orderNumber} by ${sourceDetails} via ${finalOrderSource}`
@@ -270,12 +279,12 @@ router.put(
       }
 
       // Validate status values - Simplified to 3 states
-      const validStatuses = ["active", "paid", "cancelled"];
+      const validStatuses = ["active", "closed", "cancelled"];
       if (!validStatuses.includes(status)) {
         return sendError(
           res,
           "VALIDATION_ERROR",
-          "Invalid status value. Use: active, paid, cancelled",
+          "Invalid status value. Use: active, closed, cancelled",
           400
         );
       }
@@ -338,12 +347,12 @@ router.put(
       }
 
       // Validate status values - Simplified to 3 states
-      const validStatuses = ["active", "paid", "cancelled"];
+      const validStatuses = ["active", "closed", "cancelled"];
       if (!validStatuses.includes(status)) {
         return sendError(
           res,
           "VALIDATION_ERROR",
-          "Invalid status value. Use: active, paid, cancelled",
+          "Invalid status value. Use: active, closed, cancelled",
           400
         );
       }

@@ -83,9 +83,8 @@ router.post(
         restrictions.push("All orders must be in active status");
       }
 
-      const paidOrders = orders.filter(
-        (o) => o.status.toLowerCase() === "paid"
-      );
+      // Check if all orders are paid (for merging)
+      const paidOrders = orders.filter((o) => o.paymentStatus === "paid");
       if (paidOrders.length > 0) {
         restrictions.push("Cannot merge paid orders");
       }
