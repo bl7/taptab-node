@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { logger } from "../../utils/logger";
 import { getPublicTenantId } from "../../middleware/tenant";
 import { sendSuccess, sendError } from "../../utils/response";
-import { findMany, executeQuery } from "../../utils/database";
+import { executeQuery } from "../../utils/database";
 
 const router = Router();
 
@@ -13,18 +13,34 @@ router.get("/", async (req: Request, res: Response) => {
   try {
     const tenantId = await getPublicTenantId(req);
 
-    const tables = await findMany(
-      "tables",
-      { tenantId: tenantId },
-      '"number" ASC'
+    // Join with locations table to get location details
+    const result = await executeQuery(
+      `
+      SELECT t.*, 
+             l.id as location_id, l.name as location_name, l.description as location_description, l."isActive" as location_active
+      FROM tables t
+      LEFT JOIN locations l ON t."locationId" = l.id
+      WHERE t."tenantId" = $1
+      ORDER BY t."number" ASC
+    `,
+      [tenantId]
     );
 
-    const formattedTables = tables.map((table: any) => ({
+    const formattedTables = result.rows.map((table: any) => ({
       id: table.id,
       number: table.number,
       capacity: table.capacity,
       status: table.status,
-      location: table.location,
+      location: table.location, // Legacy field for backward compatibility
+      locationId: table.locationId,
+      locationDetails: table.location_id
+        ? {
+            id: table.location_id,
+            name: table.location_name,
+            description: table.location_description,
+            isActive: table.location_active,
+          }
+        : null,
       currentOrderId: table.currentOrderId,
       createdAt: table.createdAt,
       updatedAt: table.updatedAt,

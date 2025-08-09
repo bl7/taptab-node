@@ -26,6 +26,8 @@ import authRoutes from "./routes/v1/auth";
 import menuRoutes from "./routes/v1/menu";
 import orderRoutes from "./routes/v1/orders";
 import tableRoutes from "./routes/v1/tables";
+import locationRoutes from "./routes/v1/locations";
+import tableLayoutRoutes from "./routes/v1/table-layouts";
 import analyticsRoutes from "./routes/v1/analytics";
 import settingsRoutes from "./routes/v1/settings";
 import tenantRoutes from "./routes/v1/tenants";
@@ -281,6 +283,18 @@ app.use(
   authenticateToken,
   tenantMiddleware,
   tableRoutes
+);
+app.use(
+  `/api/${apiVersion}/locations`,
+  authenticateToken,
+  tenantMiddleware,
+  locationRoutes
+);
+app.use(
+  `/api/${apiVersion}/table-layouts`,
+  authenticateToken,
+  tenantMiddleware,
+  tableLayoutRoutes
 );
 app.use(
   `/api/${apiVersion}/analytics`,
