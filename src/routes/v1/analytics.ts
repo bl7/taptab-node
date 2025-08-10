@@ -13,7 +13,7 @@ const router = Router();
 router.get(
   "/sales",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -154,7 +154,7 @@ router.get(
 router.get(
   "/orders",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -217,7 +217,7 @@ router.get(
 router.get(
   "/comprehensive",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);

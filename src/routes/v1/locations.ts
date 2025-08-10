@@ -58,7 +58,7 @@ router.get(
 router.post(
   "/",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -142,7 +142,7 @@ router.post(
 router.put(
   "/:id",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -240,7 +240,7 @@ router.put(
 router.delete(
   "/:id",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);

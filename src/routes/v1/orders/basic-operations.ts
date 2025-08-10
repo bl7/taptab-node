@@ -26,7 +26,7 @@ const router = Router();
 router.get(
   "/",
   authenticateToken,
-  requireRole(["WAITER", "CASHIER", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["WAITER", "CASHIER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -76,7 +76,7 @@ router.get(
 router.post(
   "/",
   authenticateToken,
-  requireRole(["WAITER", "CASHIER", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["WAITER", "CASHIER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -263,7 +263,7 @@ router.post(
 router.put(
   "/:id",
   authenticateToken,
-  requireRole(["WAITER", "CASHIER", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["WAITER", "CASHIER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -404,7 +404,7 @@ router.put(
 router.delete(
   "/:id",
   authenticateToken,
-  requireRole(["WAITER", "CASHIER", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["WAITER", "CASHIER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);

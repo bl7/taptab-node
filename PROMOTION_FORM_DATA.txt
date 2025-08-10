@@ -1,0 +1,126 @@
+PROMOTION FORM DATA STRUCTURE
+================================
+
+POST to: /api/v1/simple-promotions
+
+REQUIRED HEADERS:
+Authorization: Bearer YOUR_JWT_TOKEN
+Content-Type: application/json
+
+BASIC REQUIRED FIELDS:
+{
+  "name": "Your Promotion Name",
+  "type": "BOGO"
+}
+
+COMPLETE BOGO PROMOTION EXAMPLE:
+{
+  "name": "Buy 2 Get 1 Free Pizza",
+  "description": "Buy 2 pizzas, get 1 free",
+  "type": "BOGO",
+  
+  "buy_quantity": 2,
+  "get_quantity": 1,
+  
+  "buy_target_type": "CATEGORY",
+  "buy_target_category_id": "cat_1234567890_abc12",
+  "buy_target_product_ids": null,
+  
+  "get_target_type": "CATEGORY", 
+  "get_target_category_id": "cat_1234567890_def34",
+  "get_target_product_ids": null,
+  
+  "priority": 1,
+  "startDate": "2024-01-01",
+  "endDate": "2024-12-31"
+}
+
+HAPPY HOUR PROMOTION EXAMPLE:
+{
+  "name": "Happy Hour 20% Off",
+  "description": "20% off all drinks during happy hour",
+  "type": "HAPPY_HOUR",
+  
+  "discount_value": 20,
+  "start_time": "17:00",
+  "end_time": "19:00",
+  "days_of_week": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+  
+  "target_type": "ALL",
+  "target_category_id": null,
+  "target_product_ids": null,
+  
+  "priority": 1,
+  "startDate": "2024-01-01",
+  "endDate": "2024-12-31"
+}
+
+PERCENTAGE OFF PROMOTION EXAMPLE:
+{
+  "name": "10% Off Appetizers",
+  "description": "10% off all appetizer category",
+  "type": "PERCENTAGE_OFF",
+  
+  "discount_value": 10,
+  "min_order_amount": 0,
+  "max_discount_amount": 50,
+  
+  "target_type": "CATEGORY",
+  "target_category_id": "cat_1234567890_ghi56",
+  "target_product_ids": null,
+  
+  "priority": 1,
+  "startDate": "2024-01-01",
+  "endDate": "2024-12-31"
+}
+
+FIELD REQUIREMENTS BY PROMOTION TYPE:
+====================================
+
+| Field | BOGO | HAPPY_HOUR | PERCENTAGE_OFF | FIXED_OFF |
+|-------|------|-------------|----------------|-----------|
+| name | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+| type | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+| buy_quantity | ✅ Required | ❌ Not used | ❌ Not used | ❌ Not used |
+| get_quantity | ✅ Required | ❌ Not used | ❌ Not used | ❌ Not used |
+| start_time | ❌ Not used | ✅ Required | ❌ Not used | ❌ Not used |
+| end_time | ❌ Not used | ✅ Required | ❌ Not used | ❌ Not used |
+| discount_value | ❌ Not used | ❌ Not used | ✅ Required | ✅ Required |
+
+IMPORTANT NOTES:
+================
+
+1. Category IDs MUST exist in your database - use valid IDs from your categories table
+2. Time format: Use 24-hour format like "17:00" for start_time and end_time
+3. Days of week: Can be strings ("monday") or numbers (1 for Monday, 7 for Sunday)
+4. Dates: Use ISO format "YYYY-MM-DD"
+5. Arrays: Send as JSON arrays like ["product1", "product2"]
+
+QUICK TEST - MINIMAL BOGO:
+==========================
+{
+  "name": "Test BOGO",
+  "type": "BOGO",
+  "buy_quantity": 1,
+  "get_quantity": 1,
+  "buy_target_type": "ALL",
+  "get_target_type": "ALL"
+}
+
+VALID PROMOTION TYPES:
+======================
+- HAPPY_HOUR
+- BOGO
+- PERCENTAGE_OFF
+- FIXED_OFF
+
+VALID TARGET TYPES:
+===================
+- ALL
+- CATEGORY
+- PRODUCTS
+
+VALID DAYS OF WEEK:
+===================
+Strings: "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"
+Numbers: 1, 2, 3, 4, 5, 6, 7 (Monday=1, Sunday=7)

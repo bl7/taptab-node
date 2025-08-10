@@ -24,7 +24,7 @@ const router = Router();
 router.put(
   "/:id/modify",
   authenticateToken,
-  requireRole(["WAITER", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["WAITER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       logger.info("=== MODIFY ORDER ROUTE CALLED ===");
@@ -273,7 +273,7 @@ router.put(
 router.put(
   "/:id/modify/batch",
   authenticateToken,
-  requireRole(["WAITER", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["WAITER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       logger.info("=== MODIFY ORDER BATCH ROUTE CALLED ===");

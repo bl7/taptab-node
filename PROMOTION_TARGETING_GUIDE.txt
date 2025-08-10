@@ -1,0 +1,169 @@
+# 🎯 Promotion Targeting Guide
+
+## Overview
+Every promotion type in the system requires you to specify **which items** the promotion applies to. This is done through targeting fields that determine which menu items, categories, or entire orders qualify for the discount.
+
+## 🏷️ Targeting Field Types
+
+### **Basic Targeting Fields** (Used by Happy Hour, Percentage Off, Fixed Off)
+- `target_type`: `ALL`, `CATEGORY`, or `PRODUCTS`
+- `target_category_id`: Category ID (if targeting a specific category)
+- `target_product_ids`: Array of product IDs (if targeting specific products)
+
+### **BOGO-Specific Targeting Fields** (Used only by BOGO promotions)
+- **Buy Items** (what customer must purchase):
+  - `buy_target_type`: `ALL`, `CATEGORY`, or `PRODUCTS`
+  - `buy_target_category_id`: Category ID for buy items
+  - `buy_target_product_ids`: Array of product IDs for buy items
+  
+- **Get Items** (what customer gets for free):
+  - `get_target_type`: `ALL`, `CATEGORY`, or `PRODUCTS`
+  - `get_target_category_id`: Category ID for free items
+  - `get_target_product_ids`: Array of product IDs for free items
+
+## 📋 Promotion Type Targeting Examples
+
+### **1. BOGO Promotions**
+**Example: Buy 2 Pizzas, Get 1 Free**
+```json
+{
+  "type": "BOGO",
+  "buy_quantity": 2,
+  "get_quantity": 1,
+  "buy_target_type": "CATEGORY",
+  "buy_target_category_id": "cat_pizza",
+  "get_target_type": "CATEGORY",
+  "get_target_category_id": "cat_pizza"
+}
+```
+**What Happens:**
+- Customer must buy 2 items from Pizza category
+- Customer gets 1 item free from Pizza category
+- **Targeting**: Both buy and get items are from same category
+
+**Example: Buy 2 Main Courses, Get 1 Dessert Free**
+```json
+{
+  "type": "BOGO",
+  "buy_quantity": 2,
+  "get_quantity": 1,
+  "buy_target_type": "CATEGORY",
+  "buy_target_category_id": "cat_main_courses",
+  "get_target_type": "CATEGORY",
+  "get_target_category_id": "cat_desserts"
+}
+```
+**What Happens:**
+- Customer must buy 2 items from Main Courses category
+- Customer gets 1 item free from Desserts category
+- **Targeting**: Buy and get items are from different categories
+
+### **2. Happy Hour Promotions**
+**Example: 20% Off All Drinks from 5-7 PM**
+```json
+{
+  "type": "HAPPY_HOUR",
+  "discount_value": 20.0,
+  "start_time": "17:00",
+  "end_time": "19:00",
+  "days_of_week": [1, 2, 3, 4, 5],
+  "target_type": "CATEGORY",
+  "target_category_id": "cat_drinks"
+}
+```
+**What Happens:**
+- 20% discount applies to all items in Drinks category
+- Only active during specified time and days
+- **Targeting**: Uses `target_type` and `target_category_id`
+
+**Example: 15% Off All Items from 6-8 PM**
+```json
+{
+  "type": "HAPPY_HOUR",
+  "discount_value": 15.0,
+  "start_time": "18:00",
+  "end_time": "20:00",
+  "days_of_week": [1, 2, 3, 4, 5, 6, 7],
+  "target_type": "ALL"
+}
+```
+**What Happens:**
+- 15% discount applies to ALL menu items
+- Active every day during specified time
+- **Targeting**: Uses `target_type: "ALL"`
+
+### **3. Percentage Off Promotions**
+**Example: 10% Off All Appetizers**
+```json
+{
+  "type": "PERCENTAGE_OFF",
+  "discount_value": 10.0,
+  "target_type": "CATEGORY",
+  "target_category_id": "cat_appetizers"
+}
+```
+**What Happens:**
+- 10% discount applies to all items in Appetizers category
+- Always active (no time restrictions)
+- **Targeting**: Uses `target_type` and `target_category_id`
+
+**Example: 25% Off Specific Products**
+```json
+{
+  "type": "PERCENTAGE_OFF",
+  "discount_value": 25.0,
+  "target_type": "PRODUCTS",
+  "target_product_ids": ["product_123", "product_456", "product_789"]
+}
+```
+**What Happens:**
+- 25% discount applies only to the 3 specified products
+- Always active
+- **Targeting**: Uses `target_type: "PRODUCTS"` and `target_product_ids`
+
+### **4. Fixed Amount Off Promotions**
+**Example: $5 Off Orders Over $25**
+```json
+{
+  "type": "FIXED_OFF",
+  "discount_value": 5.0,
+  "min_order_amount": 25.0,
+  "target_type": "ALL"
+}
+```
+**What Happens:**
+- $5 discount applies to entire order
+- Only if order total is $25 or more
+- **Targeting**: Uses `target_type: "ALL"`
+
+**Example: $3 Off All Desserts**
+```json
+{
+  "type": "FIXED_OFF",
+  "discount_value": 3.0,
+  "target_type": "CATEGORY",
+  "target_category_id": "cat_desserts"
+}
+```
+**What Happens:**
+- $3 discount applies to all items in Desserts category
+- Always active
+- **Targeting**: Uses `target_type` and `target_category_id`
+
+## 🎯 Key Points
+
+1. **Every promotion MUST specify targeting** - either `ALL`, `CATEGORY`, or `PRODUCTS`
+2. **BOGO promotions are special** - they need separate targeting for buy vs. get items
+3. **Happy Hour adds time restrictions** on top of item targeting
+4. **Targeting determines which items qualify** for the promotion
+5. **Multiple promotions can apply** to the same order if they target different items
+
+## 🔧 Common Targeting Patterns
+
+- **Store-wide**: Use `target_type: "ALL"`
+- **Category-specific**: Use `target_type: "CATEGORY"` + `target_category_id`
+- **Product-specific**: Use `target_type: "PRODUCTS"` + `target_product_ids`
+- **Mixed BOGO**: Different categories for buy vs. get items
+- **Same Category BOGO**: Same category for both buy and get items
+
+This targeting system ensures that promotions are applied precisely to the intended items, giving you full control over which menu items benefit from each promotion.

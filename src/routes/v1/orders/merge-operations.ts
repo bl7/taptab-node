@@ -11,7 +11,7 @@ const router = Router();
 router.post(
   "/validate-merge",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER", "WAITER"]),
+  requireRole(["WAITER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -155,7 +155,7 @@ router.post(
 router.post(
   "/merge",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER", "WAITER"]),
+  requireRole(["WAITER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     logger.info("mergeDebug: MERGE ENDPOINT HIT");
     try {

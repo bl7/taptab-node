@@ -343,7 +343,7 @@ router.get(
 router.get(
   "/revenue-trend",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -419,7 +419,7 @@ router.get(
 router.get(
   "/peak-hours",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -527,7 +527,7 @@ router.get(
 router.get(
   "/top-items",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -594,7 +594,7 @@ router.get(
 router.get(
   "/staff-performance",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -647,7 +647,7 @@ router.get(
 router.get(
   "/popular-combinations",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);

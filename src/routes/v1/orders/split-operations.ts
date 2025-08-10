@@ -21,7 +21,7 @@ const router = Router();
 router.post(
   "/:id/split",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER", "WAITER"]),
+  requireRole(["WAITER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);

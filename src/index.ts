@@ -41,7 +41,7 @@ import ingredientAllergensRoutes from "./routes/v1/ingredient-allergens";
 import menuItemIngredientsRoutes from "./routes/v1/menu-item-ingredients";
 import menuTagsRoutes from "./routes/v1/menu-tags";
 import menuItemTagsRoutes from "./routes/v1/menu-item-tags";
-import promotionsRoutes from "./routes/v1/promotions";
+import simplePromotionsRoutes from "./routes/v1/simple-promotions";
 
 // Import public routes for QR ordering
 import publicMenuRoutes from "./routes/v1/public-menu";
@@ -177,8 +177,9 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Apply rate limiting to all routes
-app.use(limiter);
-app.use(speedLimiter);
+// DISABLED: Not suitable for restaurant environments with multiple users per IP
+// app.use(limiter);
+// app.use(speedLimiter);
 
 // Health check endpoint
 app.get("/health", async (req, res) => {
@@ -360,10 +361,10 @@ app.use(
   menuItemTagsRoutes
 );
 app.use(
-  `/api/${apiVersion}/promotions`,
+  `/api/${apiVersion}/simple-promotions`,
   authenticateToken,
   tenantMiddleware,
-  promotionsRoutes
+  simplePromotionsRoutes
 );
 
 // Stripe payment routes
