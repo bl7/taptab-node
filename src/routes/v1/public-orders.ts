@@ -130,6 +130,7 @@ router.post("/", async (req: Request, res: Response) => {
         unitPrice: price,
         totalPrice: itemTotal,
         notes: item.notes || "",
+        status: "pending",
         createdAt: new Date(),
       };
 

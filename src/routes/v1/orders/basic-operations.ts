@@ -204,8 +204,8 @@ router.post(
       // Create order items
       for (const item of orderItems) {
         await executeQuery(
-          `INSERT INTO "orderItems" (id, "orderId", "menuItemId", quantity, "unitPrice", "totalPrice", notes, "createdAt")
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          `INSERT INTO "orderItems" (id, "orderId", "menuItemId", quantity, "unitPrice", "totalPrice", notes, status, "createdAt")
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
           [
             generateItemId(),
             order.id,
@@ -214,6 +214,7 @@ router.post(
             item.unitPrice,
             item.totalPrice,
             item.notes,
+            "pending",
             new Date(),
           ]
         );
@@ -346,13 +347,13 @@ router.put(
         return sendError(res, "VALIDATION_ERROR", "Status is required", 400);
       }
 
-      // Validate status values - Simplified to 3 states
-      const validStatuses = ["active", "closed", "cancelled"];
+      // Validate status values for kitchen management
+      const validStatuses = ["pending", "cooked"];
       if (!validStatuses.includes(status)) {
         return sendError(
           res,
           "VALIDATION_ERROR",
-          "Invalid status value. Use: active, closed, cancelled",
+          "Invalid status value. Use: pending or cooked",
           400
         );
       }
@@ -376,15 +377,31 @@ router.put(
 
       const orderItem = orderItemResult.rows[0];
 
-      // Since item status is not in current schema, we'll just return the item with updated status
+      // Update the order item status in the database
+      await executeQuery(
+        'UPDATE "orderItems" SET status = $1, "updatedAt" = $2 WHERE id = $3',
+        [status, new Date(), itemId]
+      );
+
+      // Get the updated item
+      const updatedItemResult = await executeQuery(
+        `SELECT oi.*, mi.name as menu_item_name
+         FROM "orderItems" oi 
+         LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+         WHERE oi.id = $1`,
+        [itemId]
+      );
+
+      const updatedItem = updatedItemResult.rows[0];
+
       const formattedItem = {
-        id: orderItem.id,
-        menuItemId: orderItem.menuItemId,
-        menuItemName: orderItem.menu_item_name,
-        quantity: orderItem.quantity,
-        price: parseFloat(orderItem.unitPrice.toString()),
-        notes: orderItem.notes,
-        status: status,
+        id: updatedItem.id,
+        menuItemId: updatedItem.menuItemId,
+        menuItemName: updatedItem.menu_item_name,
+        quantity: updatedItem.quantity,
+        price: parseFloat(updatedItem.unitPrice.toString()),
+        notes: updatedItem.notes,
+        status: updatedItem.status,
       };
 
       logger.info(`Order item status updated: ${itemId} - ${status}`);

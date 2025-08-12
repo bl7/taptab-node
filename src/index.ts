@@ -33,6 +33,7 @@ import settingsRoutes from "./routes/v1/settings";
 import tenantRoutes from "./routes/v1/tenants";
 import uploadRoutes from "./routes/v1/upload";
 import dashboardRoutes from "./routes/v1/dashboard";
+import kitchenRoutes from "./routes/v1/kitchen";
 
 // Import ingredient and allergen routes
 import allergensRoutes from "./routes/v1/allergens";
@@ -321,6 +322,14 @@ app.use(
   authenticateToken,
   tenantMiddleware,
   dashboardRoutes
+);
+
+// Kitchen routes for order management
+app.use(
+  `/api/${apiVersion}/kitchen`,
+  authenticateToken,
+  tenantMiddleware,
+  kitchenRoutes
 );
 
 // Ingredient and allergen routes
