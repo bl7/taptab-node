@@ -180,14 +180,24 @@ router.put(
       }
 
       // Validate kitchen-specific status values
-      const validStatuses = ["pending", "cooked"];
+      const validStatuses = ["pending", "cooked", "ready", "active"];
       if (!validStatuses.includes(status)) {
         return sendError(
           res,
           "VALIDATION_ERROR",
-          "Invalid status value. Use: pending or cooked",
+          `Invalid status value: "${status}". Valid values are: ${validStatuses.join(
+            ", "
+          )}`,
           400
         );
+      }
+
+      // Map frontend status to database status
+      let dbStatus = status;
+      if (status === "ready") {
+        dbStatus = "cooked";
+      } else if (status === "active") {
+        dbStatus = "pending";
       }
 
       // Check if order and item exist and belong to tenant
@@ -212,7 +222,7 @@ router.put(
 
       // Update the order item status
       const updateFields = ["status = $1"];
-      const updateValues = [status];
+      const updateValues = [dbStatus];
       let paramIndex = 2;
 
       if (notes !== undefined) {

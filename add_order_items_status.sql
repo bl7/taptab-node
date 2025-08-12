@@ -2,7 +2,11 @@
 -- This allows kitchen staff to mark individual menu items as cooked or not
 
 ALTER TABLE "orderItems" 
-ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'cooked'));
+ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'cooked', 'ready', 'active'));
+
+-- Add updatedAt field for tracking when items are modified
+ALTER TABLE "orderItems" 
+ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
 
 -- Add index for better performance when querying by status
 CREATE INDEX IF NOT EXISTS idx_orderitems_status ON "orderItems" (status);
