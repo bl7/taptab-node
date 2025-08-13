@@ -18,7 +18,7 @@ router.get("/items", async (req: Request, res: Response) => {
       SELECT mi.*, c.name as category_name 
       FROM "menuItems" mi 
       LEFT JOIN categories c ON mi."categoryId" = c.id 
-      WHERE mi."tenantId" = $1 AND mi."isActive" = true
+      WHERE mi."tenantId" = $1 AND mi."isActive" = true AND mi."available" = true
     `;
     const values: any[] = [tenantId];
 
@@ -119,6 +119,7 @@ router.get("/items", async (req: Request, res: Response) => {
           categoryId: item.categoryId,
           image: item.image,
           isActive: item.isActive,
+          available: item.available,
           createdAt: item.createdAt,
           updatedAt: item.updatedAt,
           ingredients: ingredients,
