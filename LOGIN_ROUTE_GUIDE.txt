@@ -1,0 +1,587 @@
+===========================================
+TAPTAB AUTHENTICATION SYSTEM GUIDE
+===========================================
+
+This guide covers the complete authentication system including login, refresh tokens,
+and logout functionality.
+
+===========================================
+LOGIN ENDPOINT
+===========================================
+
+ENDPOINT: POST /api/v1/auth/login
+
+DESCRIPTION:
+This route authenticates users using email and 6-digit PIN. Upon successful authentication,
+it returns both an access token (short-lived) and a refresh token (long-lived) for
+secure session management.
+
+===========================================
+REQUEST FORMAT
+===========================================
+
+URL: http://localhost:5050/api/v1/auth/login (development)
+URL: https://your-app-name.onrender.com/api/v1/auth/login (production)
+
+Method: POST
+Content-Type: application/json
+
+Request Body:
+{
+  "email": "user@example.com",
+  "pin": "123456"
+}
+
+===========================================
+REQUEST PARAMETERS
+===========================================
+
+email (string, required):
+- User's email address
+- Case-insensitive (will be converted to lowercase)
+- Must be a valid email format
+- Must exist in the users table
+
+pin (string, required):
+- 6-digit numeric PIN
+- Must be exactly 6 digits (0-9)
+- Will be verified against the bcrypt-hashed password field in database
+
+===========================================
+SUCCESS RESPONSE (200 OK)
+===========================================
+
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": {
+      "id": "f662b8aa-e602-4b2e-88b4-d3e2201d139c",
+      "email": "nishantghimire@outlook.com",
+      "firstName": "Nishant",
+      "lastName": "Ghimire",
+      "role": "KITCHEN",
+      "tenantId": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+      "tenant": {
+        "id": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+        "name": "Tiffin",
+        "slug": "tiffin",
+        "logo": ""
+      }
+    }
+  },
+  "timestamp": "2025-08-14T16:25:11.913Z"
+}
+
+===========================================
+RESPONSE FIELDS EXPLANATION
+===========================================
+
+accessToken (string):
+- JWT access token for API authentication
+- Valid for 15 minutes
+- Contains: id, email, role, tenantId, type: "access"
+- Use in Authorization header: "Bearer <accessToken>"
+
+refreshToken (string):
+- JWT refresh token for getting new access tokens
+- Valid for 7 days
+- Contains: id, email, role, tenantId, type: "refresh"
+- Store securely (httpOnly cookie recommended)
+- Use to get new access tokens when they expire
+
+user.id (string):
+- Unique user identifier (UUID)
+
+user.email (string):
+- User's email address
+
+user.firstName (string):
+- User's first name
+
+user.lastName (string):
+- User's last name
+
+user.role (string):
+- User's role in the system
+- Possible values: SUPER_ADMIN, TENANT_ADMIN, MANAGER, CASHIER, WAITER, KITCHEN
+
+user.tenantId (string):
+- Unique tenant identifier (UUID)
+
+user.tenant.id (string):
+- Tenant identifier (same as user.tenantId)
+
+user.tenant.name (string):
+- Restaurant/tenant name
+
+user.tenant.slug (string):
+- URL-friendly tenant identifier
+
+user.tenant.logo (string):
+- URL to tenant logo (may be empty)
+
+===========================================
+ERROR RESPONSES
+===========================================
+
+1. VALIDATION ERROR (400 Bad Request):
+{
+  "success": false,
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Email and PIN are required"
+  },
+  "timestamp": "2025-08-14T16:17:43.716Z"
+}
+
+Causes:
+- Missing email or PIN
+- PIN not exactly 6 digits
+- Invalid email format
+
+2. INVALID CREDENTIALS (401 Unauthorized):
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_CREDENTIALS",
+    "message": "Invalid email or PIN"
+  },
+  "timestamp": "2025-08-14T16:17:43.704Z"
+}
+
+Causes:
+- User not found in database
+- PIN doesn't match stored password
+- User account is inactive
+
+3. TENANT INACTIVE (401 Unauthorized):
+{
+  "success": false,
+  "error": {
+    "code": "TENANT_INACTIVE",
+    "message": "User's tenant is not active"
+  },
+  "timestamp": "2025-08-14T16:20:47.164Z"
+}
+
+Causes:
+- User's tenant is inactive
+
+4. LOGIN ERROR (500 Internal Server Error):
+{
+  "success": false,
+  "error": {
+    "code": "LOGIN_ERROR",
+    "message": "An error occurred during login"
+  },
+  "timestamp": "2025-08-14T16:20:47.164Z"
+}
+
+Causes:
+- Database connection issues
+- Server errors
+
+===========================================
+REFRESH TOKEN ENDPOINT
+===========================================
+
+ENDPOINT: POST /api/v1/auth/refresh
+
+DESCRIPTION:
+This route generates a new access token using a valid refresh token. Use this when
+the access token expires (after 15 minutes).
+
+REQUEST FORMAT:
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+
+SUCCESS RESPONSE (200 OK):
+{
+  "success": true,
+  "data": {
+    "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "user": {
+      "id": "f662b8aa-e602-4b2e-88b4-d3e2201d139c",
+      "email": "nishantghimire@outlook.com",
+      "firstName": "Nishant",
+      "lastName": "Ghimire",
+      "role": "KITCHEN",
+      "tenantId": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+      "tenant": {
+        "id": "6e8ba720-f7f5-4352-91d9-365632cfaf60",
+        "name": "Tiffin",
+        "slug": "tiffin",
+        "logo": ""
+      }
+    }
+  },
+  "timestamp": "2025-08-14T16:25:21.446Z"
+}
+
+ERROR RESPONSES:
+- 400: "REFRESH_TOKEN_REQUIRED" - Missing refresh token
+- 401: "INVALID_REFRESH_TOKEN" - Invalid or expired refresh token
+- 401: "INVALID_TOKEN_TYPE" - Wrong token type
+- 401: "USER_NOT_FOUND" - User not found or inactive
+- 401: "TENANT_INACTIVE" - User's tenant is not active
+
+===========================================
+LOGOUT ENDPOINT
+===========================================
+
+ENDPOINT: POST /api/v1/auth/logout
+
+DESCRIPTION:
+This route logs out a user by invalidating their refresh token.
+
+REQUEST FORMAT:
+{
+  "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+
+SUCCESS RESPONSE (200 OK):
+{
+  "success": true,
+  "data": {
+    "message": "Logged out successfully"
+  },
+  "timestamp": "2025-08-14T16:25:30.438Z"
+}
+
+ERROR RESPONSES:
+- 400: "REFRESH_TOKEN_REQUIRED" - Missing refresh token
+
+===========================================
+USAGE EXAMPLES
+===========================================
+
+1. JavaScript/Fetch with Refresh Token System:
+```javascript
+class AuthService {
+  constructor() {
+    this.accessToken = localStorage.getItem('accessToken');
+    this.refreshToken = localStorage.getItem('refreshToken');
+  }
+
+  async login(email, pin) {
+    try {
+      const response = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, pin })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        // Store tokens
+        this.accessToken = data.data.accessToken;
+        this.refreshToken = data.data.refreshToken;
+        localStorage.setItem('accessToken', this.accessToken);
+        localStorage.setItem('refreshToken', this.refreshToken);
+        return data.data.user;
+      } else {
+        throw new Error(data.error.message);
+      }
+    } catch (error) {
+      console.error('Login failed:', error);
+      throw error;
+    }
+  }
+
+  async refreshAccessToken() {
+    try {
+      const response = await fetch('/api/v1/auth/refresh', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken: this.refreshToken })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        this.accessToken = data.data.accessToken;
+        localStorage.setItem('accessToken', this.accessToken);
+        return data.data.accessToken;
+      } else {
+        throw new Error(data.error.message);
+      }
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+      this.logout();
+      throw error;
+    }
+  }
+
+  async logout() {
+    try {
+      if (this.refreshToken) {
+        await fetch('/api/v1/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refreshToken: this.refreshToken })
+        });
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      // Clear tokens
+      this.accessToken = null;
+      this.refreshToken = null;
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+    }
+  }
+
+  async makeAuthenticatedRequest(url, options = {}) {
+    if (!this.accessToken) {
+      throw new Error('No access token available');
+    }
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json',
+          ...options.headers
+        }
+      });
+
+      // If token expired, try to refresh
+      if (response.status === 401) {
+        await this.refreshAccessToken();
+        
+        // Retry with new token
+        const retryResponse = await fetch(url, {
+          ...options,
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+            ...options.headers
+          }
+        });
+        
+        return retryResponse;
+      }
+
+      return response;
+    } catch (error) {
+      console.error('Request failed:', error);
+      throw error;
+    }
+  }
+}
+
+// Usage
+const auth = new AuthService();
+
+// Login
+auth.login('nishantghimire@outlook.com', '123456')
+  .then(user => console.log('Logged in:', user))
+  .catch(error => console.error('Login error:', error));
+
+// Make authenticated request
+auth.makeAuthenticatedRequest('/api/v1/orders')
+  .then(response => response.json())
+  .then(data => console.log('Orders:', data))
+  .catch(error => console.error('Request error:', error));
+
+// Logout
+auth.logout()
+  .then(() => console.log('Logged out successfully'))
+  .catch(error => console.error('Logout error:', error));
+```
+
+2. Axios:
+```javascript
+import axios from 'axios';
+
+const loginUser = async (email, pin) => {
+  try {
+    const response = await axios.post('/api/v1/auth/login', {
+      email: email,
+      pin: pin
+    });
+
+    if (response.data.success) {
+      // Store token
+      localStorage.setItem('authToken', response.data.data.token);
+      return response.data.data.user;
+    }
+  } catch (error) {
+    console.error('Login failed:', error.response?.data || error.message);
+    throw error;
+  }
+};
+```
+
+3. cURL:
+```bash
+curl -X POST http://localhost:5050/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "nishantghimire@outlook.com",
+    "pin": "123456"
+  }'
+```
+
+4. Using the token for authenticated requests:
+```javascript
+// Add token to subsequent requests
+const makeAuthenticatedRequest = async (url) => {
+  const token = localStorage.getItem('authToken');
+  
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+  });
+  
+  return response.json();
+};
+```
+
+===========================================
+SECURITY FEATURES
+===========================================
+
+1. PIN Validation:
+   - Must be exactly 6 digits
+   - Numeric only (0-9)
+
+2. Password Security:
+   - PINs are stored as bcrypt hashes
+   - Secure comparison using bcrypt.compare()
+
+3. JWT Token System:
+   - Access Token: 15-minute expiration (short-lived)
+   - Refresh Token: 7-day expiration (long-lived)
+   - Token type validation (access vs refresh)
+   - Separate secrets for access and refresh tokens
+
+4. Refresh Token Security:
+   - Stored separately from access tokens
+   - Can be invalidated on logout
+   - Automatic token refresh on expiration
+   - Secure token rotation
+
+5. Error Handling:
+   - Generic error messages for security
+   - No information leakage about user existence
+   - Proper token validation and type checking
+
+6. Input Validation:
+   - Email format validation
+   - PIN format validation
+   - Required field validation
+   - Token type validation
+
+7. Session Management:
+   - Automatic token refresh
+   - Secure logout with token invalidation
+   - User and tenant status verification
+
+===========================================
+TESTING
+===========================================
+
+1. Valid Login:
+```bash
+curl -X POST http://localhost:5050/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "nishantghimire@outlook.com", "pin": "123456"}'
+```
+
+2. Refresh Token:
+```bash
+curl -X POST http://localhost:5050/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "YOUR_REFRESH_TOKEN_HERE"}'
+```
+
+3. Logout:
+```bash
+curl -X POST http://localhost:5050/api/v1/auth/logout \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "YOUR_REFRESH_TOKEN_HERE"}'
+```
+
+4. Invalid PIN Format:
+```bash
+curl -X POST http://localhost:5050/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com", "pin": "12345"}'
+```
+
+5. Missing Fields:
+```bash
+curl -X POST http://localhost:5050/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "test@example.com"}'
+```
+
+6. Invalid Credentials:
+```bash
+curl -X POST http://localhost:5050/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "nonexistent@example.com", "pin": "123456"}'
+```
+
+7. Invalid Refresh Token:
+```bash
+curl -X POST http://localhost:5050/api/v1/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refreshToken": "invalid_token"}'
+```
+
+===========================================
+NOTES
+===========================================
+
+1. The PIN field in the database is stored as "password" (bcrypt hash)
+2. Email addresses are converted to lowercase before querying
+3. Access tokens expire after 15 minutes (short-lived for security)
+4. Refresh tokens expire after 7 days (long-lived for convenience)
+5. All timestamps are in ISO 8601 format
+6. The system is compatible with existing authentication middleware
+7. WebSocket authentication uses the same JWT token format
+8. Refresh tokens should be stored securely (httpOnly cookies recommended)
+9. Access tokens are automatically refreshed when they expire
+10. Logout invalidates refresh tokens for security
+
+===========================================
+TROUBLESHOOTING
+===========================================
+
+Common Issues:
+
+1. "Invalid email or PIN":
+   - Check if user exists in database
+   - Verify PIN is correct
+   - Ensure user account is active
+
+2. "PIN must be exactly 6 digits":
+   - Ensure PIN is exactly 6 characters
+   - Use only numeric digits (0-9)
+
+3. "Email and PIN are required":
+   - Check request body format
+   - Ensure both fields are provided
+
+4. Database errors:
+   - Check database connection
+   - Verify users table structure
+   - Ensure password field exists
+
+===========================================
