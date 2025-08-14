@@ -1,12 +1,12 @@
-import { Router } from 'express';
-import jwt from 'jsonwebtoken';
-import { logger } from '../../utils/logger';
-import { executeQuery } from '../../utils/database';
+import { Router } from "express";
+import jwt from "jsonwebtoken";
+import { logger } from "../../utils/logger";
+import { executeQuery } from "../../utils/database";
 
 const router = Router();
 
 // Verify token and get user info
-router.post('/verify', async (req, res) => {
+router.post("/verify", async (req, res) => {
   try {
     const { token } = req.body;
 
@@ -14,72 +14,67 @@ router.post('/verify', async (req, res) => {
       return res.status(400).json({
         success: false,
         error: {
-          code: 'TOKEN_REQUIRED',
-          message: 'Token is required',
+          code: "TOKEN_REQUIRED",
+          message: "Token is required",
         },
         timestamp: new Date().toISOString(),
       });
     }
 
-    // 1. SIGNATURE VERIFICATION
-    const decoded = jwt.verify(token, process.env['JWT_SECRET']!) as any;
-    
-    // 2. EXPIRATION CHECK
-    if (Date.now() >= decoded.exp * 1000) {
-      return res.status(401).json({
-        success: false,
-        error: {
-          code: 'TOKEN_EXPIRED',
-          message: 'Token expired',
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
+    // Verify token
+    const decoded = jwt.verify(token, process.env["JWT_SECRET"]!) as any;
 
-    // 3. TENANT VERIFICATION
-    const tenantResult = await executeQuery(
-      'SELECT id, name, slug, logo, colors, "isActive" FROM tenants WHERE id = $1 AND "isActive" = true',
-      [decoded.tenantId]
+    // Get user details
+    const userResult = await executeQuery(
+      'SELECT u.*, t.name as "tenantName", t.slug as "tenantSlug", t.logo as "tenantLogo", t.colors as "tenantColors" FROM users u LEFT JOIN tenants t ON u."tenantId" = t.id WHERE u.id = $1 AND u."isActive" = true',
+      [decoded.id]
     );
-    const tenant = tenantResult.rows[0];
 
-    if (!tenant) {
+    if (userResult.rows.length === 0) {
       return res.status(401).json({
         success: false,
         error: {
-          code: 'TENANT_NOT_FOUND',
-          message: 'Tenant not found or inactive',
+          code: "USER_NOT_FOUND",
+          message: "User not found",
         },
         timestamp: new Date().toISOString(),
       });
     }
 
-    res.json({
+    const user = userResult.rows[0];
+
+    return res.json({
       success: true,
       data: {
         user: {
-          id: decoded.id,
-          email: decoded.email,
-          firstName: decoded.firstName,
-          lastName: decoded.lastName,
-          role: decoded.role,
-          tenantId: decoded.tenantId,
-          tenant: tenant,
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          tenantId: user.tenantId,
+          tenant: {
+            id: user.tenantId,
+            name: user.tenantName,
+            slug: user.tenantSlug,
+            logo: user.tenantLogo,
+            colors: user.tenantColors,
+          },
         },
       },
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    logger.error('Token verification error:', error);
-    res.status(401).json({
+    logger.error("Token verification error:", error);
+    return res.status(401).json({
       success: false,
       error: {
-        code: 'INVALID_TOKEN',
-        message: 'Invalid token',
+        code: "INVALID_TOKEN",
+        message: "Invalid or expired token",
       },
       timestamp: new Date().toISOString(),
     });
   }
 });
 
-export default router; 
+export default router;

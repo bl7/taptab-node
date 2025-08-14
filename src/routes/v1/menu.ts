@@ -1,16 +1,17 @@
 import { Router, Request, Response } from "express";
-import { logger } from "../../utils/logger";
-import { getTenantId, getPublicTenantId } from "../../middleware/tenant";
 import { authenticateToken, requireRole } from "../../middleware/auth";
+import { getTenantId } from "../../middleware/tenant";
 import { sendSuccess, sendError } from "../../utils/response";
+import { logger } from "../../utils/logger";
 import {
-  findMany,
-  findById,
+  executeQuery,
   createWithCheck,
   updateWithCheck,
   deleteWithCheck,
-  executeQuery,
+  findById,
+  findMany,
 } from "../../utils/database";
+import { DatabaseError } from "pg";
 
 const router = Router();
 
@@ -144,112 +145,66 @@ router.get("/items", authenticateToken, async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/menu/items - Create new menu item
+// POST /api/v1/menu/items - Create a new menu item
 router.post(
   "/items",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["MANAGER", "TENANT_ADMIN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
-
-      // DEBUG: Log the incoming request
-      console.log("=== POST MENU ITEM DEBUG ===");
-      console.log("Request Body:", JSON.stringify(req.body, null, 2));
-      console.log("Tenant ID:", tenantId);
-      console.log("===========================");
-
       const {
         name,
         description,
         price,
         categoryId,
         image,
-        ingredients = [],
-        tags = [],
+        isActive = true,
       } = req.body;
 
       // Validate required fields
-      if (!name || !price) {
+      if (!name || !price || !categoryId) {
         return sendError(
           res,
           "VALIDATION_ERROR",
-          "Name and price are required",
+          "Name, price, and category are required",
           400
         );
       }
 
-      // Verify category exists if provided
-      if (categoryId) {
-        const categoryResult = await executeQuery(
-          'SELECT id FROM categories WHERE id = $1 AND "tenantId" = $2',
-          [categoryId, tenantId]
+      // Validate price
+      if (typeof price !== "number" || price <= 0) {
+        return sendError(
+          res,
+          "VALIDATION_ERROR",
+          "Price must be a positive number",
+          400
         );
-
-        if (categoryResult.rows.length === 0) {
-          return sendError(
-            res,
-            "CATEGORY_NOT_FOUND",
-            "Category not found",
-            400
-          );
-        }
       }
 
-      // Validate ingredients if provided
-      if (ingredients && ingredients.length > 0) {
-        for (const ingredient of ingredients) {
-          if (!ingredient.ingredientId || !ingredient.quantity) {
-            return sendError(
-              res,
-              "VALIDATION_ERROR",
-              "Each ingredient must have ingredientId and quantity",
-              400
-            );
-          }
+      // Check if category exists
+      const categoryResult = await executeQuery(
+        'SELECT id FROM "menuCategories" WHERE id = $1 AND "tenantId" = $2',
+        [categoryId, tenantId]
+      );
 
-          // Verify ingredient exists and belongs to tenant
-          const ingredientResult = await executeQuery(
-            "SELECT id FROM ingredients WHERE id = $1 AND tenantId = $2",
-            [ingredient.ingredientId, tenantId]
-          );
-
-          if (ingredientResult.rows.length === 0) {
-            return sendError(
-              res,
-              "INGREDIENT_NOT_FOUND",
-              `Ingredient with ID ${ingredient.ingredientId} not found`,
-              400
-            );
-          }
-        }
+      if (categoryResult.rows.length === 0) {
+        return sendError(res, "VALIDATION_ERROR", "Category not found", 400);
       }
 
+      // Prepare item data
       const itemData = {
-        id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         name,
-        description,
+        description: description || "",
         price,
-        categoryId: categoryId || null,
-        tenantId: tenantId, // quoted camelCase to match DB column
-        image,
-        sortOrder: 0,
-        isActive: true,
-        available: true, // Default to available when creating (optional field)
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        categoryId,
+        image: image || null,
+        isActive,
+        tenantId,
       };
 
-      // DEBUG: Log the itemData before database call
-      console.log("=== ITEM DATA DEBUG ===");
-      console.log("Item Data:", JSON.stringify(itemData, null, 2));
-      console.log("Table: menuItems");
-      console.log("Check Field: name");
-      console.log("Check Value:", name);
-      console.log("Tenant ID:", tenantId);
-      console.log("=======================");
-
-      const item = await createWithCheck(
+      // Create menu item
+      const newItem = await createWithCheck(
         "menuItems",
         itemData,
         "name",
@@ -257,187 +212,19 @@ router.post(
         tenantId
       );
 
-      // Create ingredient relationships if provided
-      if (ingredients && ingredients.length > 0) {
-        for (const ingredient of ingredients) {
-          const menuItemIngredientData = {
-            id: `mii_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-            menuItemId: item.id,
-            ingredientId: ingredient.ingredientId,
-            quantity: ingredient.quantity,
-          };
-
-          await executeQuery(
-            `INSERT INTO "menuItemIngredients" (id, "menuItemId", "ingredientId", quantity) 
-             VALUES ($1, $2, $3, $4)`,
-            [
-              menuItemIngredientData.id,
-              menuItemIngredientData.menuItemId,
-              menuItemIngredientData.ingredientId,
-              menuItemIngredientData.quantity,
-            ]
-          );
-        }
-      }
-
-      // Validate and create tag relationships if provided
-      if (tags && tags.length > 0) {
-        // Validate each tag exists and is active
-        for (const tagId of tags) {
-          if (!tagId || typeof tagId !== "string") {
-            return sendError(
-              res,
-              "VALIDATION_ERROR",
-              "Each tag must be a valid tag ID",
-              400
-            );
-          }
-
-          // Verify tag exists and is active
-          const tagResult = await executeQuery(
-            "SELECT id FROM menuTags WHERE id = $1 AND isActive = true",
-            [tagId]
-          );
-
-          if (tagResult.rows.length === 0) {
-            return sendError(
-              res,
-              "TAG_NOT_FOUND",
-              `Tag with ID ${tagId} not found`,
-              400
-            );
-          }
-        }
-
-        // Create tag assignments
-        for (const tagId of tags) {
-          const menuItemTagData = {
-            id: `mit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-            menuItemId: item.id,
-            tagId: tagId,
-            createdAt: new Date(),
-          };
-
-          await executeQuery(
-            `INSERT INTO "menuItemTags" (id, "menuItemId", "tagId", createdat) 
-             VALUES ($1, $2, $3, $4)`,
-            [
-              menuItemTagData.id,
-              menuItemTagData.menuItemId,
-              menuItemTagData.tagId,
-              menuItemTagData.createdAt,
-            ]
-          );
-        }
-      }
-
-      // Get category name for response if categoryId exists
-      let categoryName = "";
-      if (item.categoryId) {
-        const categoryNameResult = await executeQuery(
-          "SELECT name FROM categories WHERE id = $1",
-          [item.categoryId]
-        );
-        categoryName = categoryNameResult.rows[0]?.name || "";
-      }
-
-      // Get ingredients for response
-      const ingredientsQuery = `
-        SELECT mii.*, i.name as ingredient_name, i.description as ingredient_description, 
-               i.unit as ingredient_unit, i.costPerUnit
-        FROM "menuItemIngredients" mii
-        JOIN ingredients i ON mii."ingredientId" = i.id
-        WHERE mii."menuItemId" = $1
-      `;
-      const ingredientsResult = await executeQuery(ingredientsQuery, [item.id]);
-      const menuItemIngredients = ingredientsResult.rows.map((ing: any) => ({
-        id: ing.id,
-        ingredientId: ing.ingredientId,
-        quantity: parseFloat((ing.quantity || 0).toString()),
-        unit: ing.unit,
-        ingredient: {
-          id: ing.ingredientId,
-          name: ing.ingredient_name,
-          description: ing.ingredient_description,
-          unit: ing.ingredient_unit,
-          costPerUnit: parseFloat((ing.costPerUnit || 0).toString()),
-        },
-      }));
-
-      // Get allergens for response
-      const allergensQuery = `
-        SELECT DISTINCT a.id, a.name, a.description, a.severity, a.isStandard,
-               ia."ingredientId", i.name as ingredient_name
-        FROM allergens a
-        JOIN "ingredientAllergens" ia ON a.id = ia."allergenId"
-        JOIN "menuItemIngredients" mii ON ia."ingredientId" = mii."ingredientId"
-        JOIN ingredients i ON ia."ingredientId" = i.id
-        WHERE mii."menuItemId" = $1
-        ORDER BY a.isStandard DESC, a.name ASC
-      `;
-      const allergensResult = await executeQuery(allergensQuery, [item.id]);
-
-      const allergenMap = new Map();
-      allergensResult.rows.forEach((allergen: any) => {
-        if (!allergenMap.has(allergen.id)) {
-          allergenMap.set(allergen.id, {
-            id: allergen.id,
-            name: allergen.name,
-            description: allergen.description,
-            severity: allergen.severity,
-            isStandard: allergen.isStandard,
-            sources: [],
-          });
-        }
-        allergenMap.get(allergen.id).sources.push({
-          ingredientId: allergen.ingredientId,
-          ingredientName: allergen.ingredient_name,
-        });
-      });
-      const allergens = Array.from(allergenMap.values());
-
-      // Get tags for response
-      const tagsQuery = `
-        SELECT mt.id, mt.name, mt.description, mt.color, mit.createdat as assignedAt
-        FROM "menuItemTags" mit
-        JOIN menuTags mt ON mit."tagId" = mt.id
-        WHERE mit."menuItemId" = $1 AND mt.isActive = true
-        ORDER BY mt.name ASC
-      `;
-      const tagsResult = await executeQuery(tagsQuery, [item.id]);
-      const menuItemTags = tagsResult.rows.map((tag: any) => ({
-        id: tag.id,
-        name: tag.name,
-        description: tag.description,
-        color: tag.color,
-        assignedAt: tag.assignedAt,
-      }));
-
-      const formattedItem = {
-        id: item.id,
-        name: item.name,
-        description: item.description,
-        price: parseFloat((item.price || 0).toString()),
-        category: categoryName,
-        categoryId: item.categoryId,
-        image: item.image,
-        isActive: item.isActive,
-        available: item.available,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-        ingredients: menuItemIngredients,
-        allergens: allergens,
-        tags: menuItemTags,
-      };
-
-      logger.info(`Menu item created: ${item.name}`);
-      sendSuccess(
-        res,
-        { item: formattedItem },
-        "Menu item created successfully",
-        201
-      );
+      logger.info(`Menu item created: ${newItem.id} by tenant: ${tenantId}`);
+      sendSuccess(res, { menuItem: newItem }, "Menu item created successfully");
     } catch (error) {
+      if (error instanceof DatabaseError) {
+        if (error.code === "DUPLICATE_ERROR") {
+          return sendError(
+            res,
+            "DUPLICATE_ERROR",
+            "A menu item with this name already exists",
+            409
+          );
+        }
+      }
       logger.error("Create menu item error:", error);
       sendError(res, "CREATE_ERROR", "Failed to create menu item");
     }
@@ -470,7 +257,7 @@ router.put(
       }
 
       // Check if item exists and get it
-      const existingItem = await findById("menuItems", id, tenantId);
+      await findById("menuItems", id, tenantId);
 
       // Verify category if being changed
       if (categoryId) {
@@ -788,7 +575,7 @@ router.patch(
       }
 
       // Check if item exists and get it
-      const existingItem = await findById("menuItems", id, tenantId);
+      await findById("menuItems", id, tenantId);
 
       const updateData = {
         available,

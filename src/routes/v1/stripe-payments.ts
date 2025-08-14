@@ -1,8 +1,8 @@
 import { Router, Request, Response } from "express";
 import { body, param, validationResult } from "express-validator";
 import { logger } from "../../utils/logger";
-import { getTenantId } from "../../middleware/tenant";
-import { authenticateToken, requireRole } from "../../middleware/auth";
+// import { getTenantId } from "../../middleware/tenant";
+import { authenticateToken } from "../../middleware/auth";
 import { sendSuccess, sendError } from "../../utils/response";
 import { StripeService } from "../../services/stripe-service";
 import { executeQuery } from "../../utils/database";
@@ -42,7 +42,7 @@ router.get(
       logger.info(`📝 Request params:`, req.params);
       logger.info(`📝 Request headers:`, req.headers);
 
-      const config = await stripeService.getTenantStripeConfig(tenantId);
+      const config = await stripeService.getTenantStripeConfig(tenantId || "");
 
       logger.info(`✅ Config found for tenant ${tenantId}`);
       sendSuccess(res, config, "Stripe configuration retrieved successfully");
@@ -163,8 +163,8 @@ router.post(
       const {
         paymentIntentId,
         paymentMethod,
-        amount,
-        stripePaymentMethodId,
+        // amount,
+        // stripePaymentMethodId,
         tenantId,
       } = req.body;
 
@@ -183,6 +183,10 @@ router.post(
           "Tenant ID is required in request body",
           400
         );
+      }
+
+      if (!orderId) {
+        return sendError(res, "VALIDATION_ERROR", "Order ID is required", 400);
       }
 
       const result = await StripeService.confirmPayment({
@@ -354,6 +358,10 @@ router.get(
       const { orderId } = req.params;
       const { tenantId } = req.query; // Get tenantId from query params
 
+      if (!orderId) {
+        return sendError(res, "VALIDATION_ERROR", "Order ID is required", 400);
+      }
+
       logger.info(
         `🔍 GET /api/v1/stripe/orders/${orderId}/payment-status called`
       );
@@ -401,6 +409,10 @@ router.post(
     try {
       const { tenantId } = req.params;
       const signature = req.headers["stripe-signature"] as string;
+
+      if (!tenantId) {
+        return sendError(res, "VALIDATION_ERROR", "Tenant ID is required", 400);
+      }
 
       if (!signature) {
         return sendError(

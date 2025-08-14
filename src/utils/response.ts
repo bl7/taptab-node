@@ -1,4 +1,4 @@
-import { Response } from 'express';
+import { Response } from "express";
 
 export interface ApiResponse {
   success: boolean;
@@ -12,17 +12,32 @@ export interface ApiResponse {
   timestamp: string;
 }
 
-export const sendSuccess = (res: Response, data?: any, message?: string, status = 200) => {
+export const sendSuccess = (
+  res: Response,
+  data: any,
+  message?: string,
+  statusCode: number = 200
+) => {
   const response: ApiResponse = {
     success: true,
     data,
-    message,
     timestamp: new Date().toISOString(),
   };
-  res.status(status).json(response);
+
+  if (message) {
+    response.message = message;
+  }
+
+  res.status(statusCode).json(response);
 };
 
-export const sendError = (res: Response, code: string, message: string, status = 500, details?: any) => {
+export const sendError = (
+  res: Response,
+  code: string,
+  message: string,
+  status = 500,
+  details?: any
+) => {
   const response: ApiResponse = {
     success: false,
     error: {
@@ -35,6 +50,6 @@ export const sendError = (res: Response, code: string, message: string, status =
   res.status(status).json(response);
 };
 
-export const sendNotFound = (res: Response, message = 'Resource not found') => {
-  sendError(res, 'NOT_FOUND', message, 404);
-}; 
+export const sendNotFound = (res: Response, message = "Resource not found") => {
+  sendError(res, "NOT_FOUND", message, 404);
+};

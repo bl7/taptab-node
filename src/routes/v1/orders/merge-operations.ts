@@ -229,8 +229,8 @@ router.post(
       }
 
       // Determine target order based on merge strategy
-      let targetOrder;
-      let mergedOrderId;
+      let targetOrder: any;
+      let mergedOrderId: string;
 
       if (mergeStrategy === "append") {
         // Append strategy: Use one of the source orders as target, or specified target
@@ -289,6 +289,8 @@ router.post(
           createdByUserId: waiterId || sourceOrders[0]?.createdByUserId,
           createdByUserName: waiterName || sourceOrders[0]?.createdByUserName,
           status: "active",
+          orderSource: "MERGED", // Set to MERGED for merged orders
+          paymentStatus: "pending", // Set to pending for frontend visibility
           totalAmount: 0,
           taxAmount: 0,
           discountAmount: 0,
@@ -301,9 +303,9 @@ router.post(
           `
           INSERT INTO orders (id, "orderNumber", "customerName", "customerPhone", "specialInstructions",
                             "tableNumber", "tenantId", "createdByUserId", "createdByUserName", status,
-                            "totalAmount", "taxAmount", "discountAmount", "finalAmount",
+                            "orderSource", "paymentStatus", "totalAmount", "taxAmount", "discountAmount", "finalAmount",
                             "createdAt", "updatedAt")
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
         `,
           [
             newOrderData.id,
@@ -316,6 +318,8 @@ router.post(
             newOrderData.createdByUserId,
             newOrderData.createdByUserName,
             newOrderData.status,
+            newOrderData.orderSource,
+            newOrderData.paymentStatus,
             newOrderData.totalAmount,
             newOrderData.taxAmount,
             newOrderData.discountAmount,
@@ -593,6 +597,27 @@ router.post(
         mergedOrderId,
         "is active"
       );
+
+      // Update the table to show the merged order is assigned to it
+      if (targetOrder.tableNumber) {
+        await executeQuery(
+          `
+          UPDATE tables 
+          SET "currentOrderId" = $1,
+              status = 'occupied',
+              "updatedAt" = $2
+          WHERE id = $3 AND "tenantId" = $4
+        `,
+          [mergedOrderId, new Date(), targetOrder.tableNumber, tenantId]
+        );
+        logger.info(
+          "mergeDebug: Updated table",
+          targetOrder.tableNumber,
+          "to show merged order",
+          mergedOrderId,
+          "is assigned"
+        );
+      }
 
       // Final status check
       const finalStatusCheck = await executeQuery(statusCheckQuery, [

@@ -1,0 +1,306 @@
+===========================================
+MERGED ORDERS - FRONTEND INTEGRATION GUIDE
+===========================================
+
+✅ UPDATED: Backend now uses "MERGED" as orderSource for merged orders!
+
+Date: January 2025
+Status: ✅ BACKEND READY - Frontend needs to be updated
+Backend Status: ✅ COMPLETELY FIXED
+
+===========================================
+WHAT CHANGED
+===========================================
+
+**Before:**
+- Merged orders had `orderSource: "INTERNAL"` (not visible on tables)
+- Frontend filtered out these orders
+
+**After:**
+- Merged orders now have `orderSource: "MERGED"` 
+- Frontend needs to be updated to handle this new source type
+
+===========================================
+FRONTEND CHANGES REQUIRED
+===========================================
+
+**1. Update Order Visibility Filter**
+
+In `src/lib/order-utils.ts`, update the `isOrderVisibleOnTable` function:
+
+```typescript
+// BEFORE (current code):
+export function isOrderVisibleOnTable(order: Order): boolean {
+  return (
+    order.status?.toLowerCase() === "active" &&
+    (order.orderSource === "QR_ORDERING" ||
+      order.orderSource === "SPLIT" ||
+      (["WAITER", "WAITER_ORDERING", "CASHIER", "CASHIER_ORDERING"].includes(
+        order.orderSource || ""
+      ) &&
+        order.paymentStatus?.toLowerCase() === "pending"))
+  );
+}
+
+// AFTER (updated code):
+export function isOrderVisibleOnTable(order: Order): boolean {
+  return (
+    order.status?.toLowerCase() === "active" &&
+    (order.orderSource === "QR_ORDERING" ||
+      order.orderSource === "SPLIT" ||
+      order.orderSource === "MERGED" ||  // ✅ ADD THIS LINE
+      (["WAITER", "WAITER_ORDERING", "CASHIER", "CASHIER_ORDERING"].includes(
+        order.orderSource || ""
+      ) &&
+        order.paymentStatus?.toLowerCase() === "pending"))
+  );
+}
+```
+
+**2. Update Order Source Types (if you have TypeScript types)**
+
+If you have order source types defined, add "MERGED":
+
+```typescript
+// In your types file (e.g., types/order.ts):
+export type OrderSource = 
+  | "QR_ORDERING"
+  | "WAITER"
+  | "WAITER_ORDERING" 
+  | "CASHIER"
+  | "CASHIER_ORDERING"
+  | "SPLIT"
+  | "MERGED"  // ✅ ADD THIS
+  | "INTERNAL"
+  | "DELIVERY";
+```
+
+**3. Update Order Source Display/UI**
+
+If you display order sources in the UI, add handling for "MERGED":
+
+```typescript
+// In your order display component:
+const getOrderSourceLabel = (orderSource: string) => {
+  switch (orderSource) {
+    case "QR_ORDERING":
+      return "QR Order";
+    case "WAITER":
+    case "WAITER_ORDERING":
+      return "Waiter";
+    case "CASHIER":
+    case "CASHIER_ORDERING":
+      return "Cashier";
+    case "SPLIT":
+      return "Split";
+    case "MERGED":  // ✅ ADD THIS CASE
+      return "Merged";
+    case "DELIVERY":
+      return "Delivery";
+    default:
+      return "Unknown";
+  }
+};
+
+// Or if you use icons:
+const getOrderSourceIcon = (orderSource: string) => {
+  switch (orderSource) {
+    case "QR_ORDERING":
+      return <QrCodeIcon />;
+    case "MERGED":  // ✅ ADD THIS CASE
+      return <MergeIcon />; // or <CombineIcon /> or similar
+    case "SPLIT":
+      return <SplitIcon />;
+    // ... other cases
+  }
+};
+```
+
+**4. Update Order Source Colors/Styling**
+
+If you have different colors for different order sources:
+
+```typescript
+// In your styling logic:
+const getOrderSourceColor = (orderSource: string) => {
+  switch (orderSource) {
+    case "QR_ORDERING":
+      return "bg-blue-500";
+    case "WAITER":
+    case "WAITER_ORDERING":
+      return "bg-green-500";
+    case "CASHIER":
+    case "CASHIER_ORDERING":
+      return "bg-purple-500";
+    case "SPLIT":
+      return "bg-orange-500";
+    case "MERGED":  // ✅ ADD THIS CASE
+      return "bg-indigo-500"; // or any color you prefer
+    case "DELIVERY":
+      return "bg-red-500";
+    default:
+      return "bg-gray-500";
+  }
+};
+```
+
+===========================================
+ORDER SOURCE BEHAVIOR
+===========================================
+
+**Merged Orders Behavior:**
+- ✅ **Always Visible**: When status is "active" (no payment status check needed)
+- ✅ **Show on Tables**: Will appear in table order counts
+- ✅ **Special Handling**: May need different UI treatment than regular orders
+
+**Current Order Sources:**
+1. **QR_ORDERING** - Always visible when active
+2. **SPLIT** - Always visible when active  
+3. **MERGED** - Always visible when active ✅ **NEW**
+4. **WAITER/WAITER_ORDERING** - Visible when active AND payment pending
+5. **CASHIER/CASHIER_ORDERING** - Visible when active AND payment pending
+6. **DELIVERY** - May have different rules
+7. **INTERNAL** - Not visible on tables (filtered out)
+
+===========================================
+TESTING CHECKLIST
+===========================================
+
+**✅ Test Cases:**
+1. ✅ Merged orders appear on tables
+2. ✅ Merged orders show correct source label
+3. ✅ Merged orders have appropriate styling
+4. ✅ Table order counts include merged orders
+5. ✅ Order details show "Merged" as source
+6. ✅ No breaking changes to existing order sources
+
+**🔍 Test Data Available:**
+- `order_merged_1755172659558_pdiq0` - Table 1, $30 total
+- `order_merged_1755172443180_6vz3l` - Table 2, $71 total  
+- `order_merged_1755171884546_s5gsd` - Table 3, $27 total
+
+===========================================
+UI CONSIDERATIONS
+===========================================
+
+**1. Visual Distinction**
+Consider how to visually distinguish merged orders:
+- Different badge color
+- Special icon (merge/combine icon)
+- Different border style
+- Special label
+
+**2. Order Details**
+In order details view, you might want to show:
+- "Merged Order" as the source
+- List of original orders that were merged
+- Merge timestamp
+- Who performed the merge
+
+**3. Table Display**
+On table view:
+- Show merged orders in order count
+- Maybe special indicator for merged orders
+- Consider if merged orders need different treatment
+
+===========================================
+EXAMPLE IMPLEMENTATION
+===========================================
+
+**Complete Example:**
+
+```typescript
+// 1. Update visibility filter
+export function isOrderVisibleOnTable(order: Order): boolean {
+  return (
+    order.status?.toLowerCase() === "active" &&
+    (order.orderSource === "QR_ORDERING" ||
+      order.orderSource === "SPLIT" ||
+      order.orderSource === "MERGED" ||  // ✅ ADDED
+      (["WAITER", "WAITER_ORDERING", "CASHIER", "CASHIER_ORDERING"].includes(
+        order.orderSource || ""
+      ) &&
+        order.paymentStatus?.toLowerCase() === "pending"))
+  );
+}
+
+// 2. Update display logic
+const OrderSourceBadge = ({ orderSource }: { orderSource: string }) => {
+  const getLabel = () => {
+    switch (orderSource) {
+      case "MERGED": return "Merged";
+      case "SPLIT": return "Split";
+      case "QR_ORDERING": return "QR";
+      // ... other cases
+    }
+  };
+
+  const getColor = () => {
+    switch (orderSource) {
+      case "MERGED": return "bg-indigo-500";
+      case "SPLIT": return "bg-orange-500";
+      // ... other cases
+    }
+  };
+
+  return (
+    <span className={`px-2 py-1 rounded text-xs text-white ${getColor()}`}>
+      {getLabel()}
+    </span>
+  );
+};
+```
+
+===========================================
+MIGRATION NOTES
+===========================================
+
+**Backend Changes:**
+- ✅ All existing merged orders updated to `orderSource: "MERGED"`
+- ✅ New merged orders will automatically use `orderSource: "MERGED"`
+- ✅ No breaking changes to existing APIs
+
+**Frontend Changes:**
+- ⚠️ Must update `isOrderVisibleOnTable` function
+- ⚠️ Must handle "MERGED" in UI components
+- ⚠️ Test thoroughly to ensure merged orders appear
+
+**Timeline:**
+- Backend: ✅ COMPLETE
+- Frontend: ⚠️ NEEDS UPDATE
+- Testing: ⚠️ NEEDS VERIFICATION
+
+===========================================
+SUCCESS METRICS
+===========================================
+
+✅ **Backend Ready:**
+- Merged orders have correct `orderSource: "MERGED"`
+- All existing merged orders updated
+- New merge operations use correct source
+
+⚠️ **Frontend Action Required:**
+- Update visibility filter to include "MERGED"
+- Update UI components to handle "MERGED"
+- Test that merged orders appear on tables
+
+🎯 **Expected Result:**
+- Merged orders visible on tables
+- Correct order counts displayed
+- Proper styling and labeling for merged orders
+
+===========================================
+CONTACT & SUPPORT
+===========================================
+
+Backend Status: ✅ COMPLETE
+Frontend Action: ⚠️ REQUIRED
+Testing: ⚠️ REQUIRED
+
+**Next Steps:**
+1. Update frontend visibility filter
+2. Update UI components
+3. Test with existing merged orders
+4. Verify table order counts are correct
+
+===========================================

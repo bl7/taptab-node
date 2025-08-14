@@ -37,18 +37,17 @@ router.get(
         return sendError(res, "NOT_FOUND", "Ingredient not found", 404);
       }
 
-      // Get allergens for the ingredient
-      const query = `
-      SELECT a.*
-      FROM allergens a
-      INNER JOIN "ingredientAllergens" ia ON a.id = ia."allergenId"
-      WHERE ia."ingredientId" = $1 AND a."tenantId" = $2
-      ORDER BY a.name ASC
-    `;
+      // Get all allergens for the ingredient
+      const allergensResult = await executeQuery(
+        `SELECT a.*, ia."ingredientId"
+         FROM allergens a
+         JOIN "ingredientAllergens" ia ON a.id = ia."allergenId"
+         WHERE ia."ingredientId" = $1
+         ORDER BY a.name ASC`,
+        [ingredientId]
+      );
 
-      const result = await executeQuery(query, [ingredientId, tenantId]);
-
-      const formattedAllergens = result.rows.map((row: any) => ({
+      const formattedAllergens = allergensResult.rows.map((row: any) => ({
         id: row.id,
         name: row.name,
         description: row.description,
@@ -170,7 +169,6 @@ router.delete(
   requireRole(["TENANT_ADMIN", "MANAGER"]),
   async (req: Request, res: Response) => {
     try {
-      const tenantId = getTenantId(req);
       const { ingredientId, allergenId } = req.params;
 
       if (!ingredientId || !allergenId) {

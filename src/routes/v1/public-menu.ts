@@ -12,6 +12,11 @@ const router = Router();
 router.get("/items", async (req: Request, res: Response) => {
   try {
     const tenantId = await getPublicTenantId(req);
+
+    if (!tenantId) {
+      return sendError(res, "TENANT_NOT_FOUND", "Restaurant not found", 404);
+    }
+
     const { category } = req.query;
 
     let query = `
@@ -162,6 +167,10 @@ router.get("/items", async (req: Request, res: Response) => {
 router.get("/categories", async (req: Request, res: Response) => {
   try {
     const tenantId = await getPublicTenantId(req);
+
+    if (!tenantId) {
+      return sendError(res, "TENANT_NOT_FOUND", "Restaurant not found", 404);
+    }
 
     const categories = await findMany(
       "categories",

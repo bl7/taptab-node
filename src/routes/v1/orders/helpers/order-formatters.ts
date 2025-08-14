@@ -50,6 +50,14 @@ export function formatOrderFromRows(orderRows: any[]): any {
     estimatedDeliveryTime: firstRow.estimatedDeliveryTime,
     taxAmount: parseFloat(firstRow.taxAmount?.toString() || 0),
     discountAmount: parseFloat(firstRow.discountAmount?.toString() || 0),
+    // Cancellation details
+    cancellationReason: firstRow.cancellationReason || null,
+    cancelledByUserId: firstRow.cancelledByUserId || null,
+    cancelledAt: firstRow.cancelledAt || null,
+    cancelledBy:
+      firstRow.cancelled_by_first_name && firstRow.cancelled_by_last_name
+        ? `${firstRow.cancelled_by_first_name} ${firstRow.cancelled_by_last_name}`
+        : firstRow.cancelledByUserId || null,
     createdAt: firstRow.createdAt,
     updatedAt: firstRow.updatedAt,
   };
@@ -94,6 +102,14 @@ export function formatOrdersFromRows(rows: any[]): any[] {
         estimatedDeliveryTime: row.estimatedDeliveryTime,
         taxAmount: parseFloat(row.taxAmount.toString()),
         discountAmount: parseFloat(row.discountAmount.toString()),
+        // Cancellation details
+        cancellationReason: row.cancellationReason || null,
+        cancelledByUserId: row.cancelledByUserId || null,
+        cancelledAt: row.cancelledAt || null,
+        cancelledBy:
+          row.cancelled_by_first_name && row.cancelled_by_last_name
+            ? `${row.cancelled_by_first_name} ${row.cancelled_by_last_name}`
+            : row.cancelledByUserId || null,
       });
     }
 

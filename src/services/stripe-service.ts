@@ -603,7 +603,7 @@ export class StripeService {
         paymentIntent.id
       );
 
-      const orderId = paymentIntent.metadata?.orderId;
+      const orderId = paymentIntent.metadata?.["orderId"];
 
       if (!orderId) {
         logger.error(`❌ Missing orderId in payment intent metadata`);
@@ -706,7 +706,7 @@ export class StripeService {
         paymentIntent.id
       );
 
-      const orderId = paymentIntent.metadata?.orderId;
+      const orderId = paymentIntent.metadata?.["orderId"];
 
       if (!orderId) {
         logger.error(`❌ Missing orderId in payment intent metadata`);
@@ -750,7 +750,7 @@ export class StripeService {
         paymentIntent.id
       );
 
-      const orderId = paymentIntent.metadata?.orderId;
+      const orderId = paymentIntent.metadata?.["orderId"];
 
       if (!orderId) {
         logger.error(`❌ Missing orderId in payment intent metadata`);

@@ -189,14 +189,15 @@ router.get(
       const ordersResult = await executeQuery(ordersQuery, queryParams);
       const orders = ordersResult.rows;
 
-      // Count orders by status
-      const statusCounts: { [key: string]: number } = {};
-      orders.forEach((row: any) => {
-        statusCounts[row.status.toLowerCase()] = parseInt(row.count);
-      });
+      // Calculate order status breakdown
+      const statusBreakdown = orders.reduce((acc: any, order: any) => {
+        const status = order.status;
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {});
 
-      const paidOrders = statusCounts.paid || 0;
-      const cancelledOrders = statusCounts.cancelled || 0;
+      const paidOrders = statusBreakdown["paid"] || 0;
+      const cancelledOrders = statusBreakdown["cancelled"] || 0;
 
       sendSuccess(res, {
         paidOrders,

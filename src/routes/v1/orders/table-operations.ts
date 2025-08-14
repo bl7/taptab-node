@@ -4,9 +4,153 @@ import { getTenantId } from "../../../middleware/tenant";
 import { authenticateToken, requireRole } from "../../../middleware/auth";
 import { sendSuccess, sendError } from "../../../utils/response";
 import { executeQuery } from "../../../utils/database";
-import { validateTableExists } from "./helpers/validation";
+// import { validateTableExists } from "./helpers/validation";
 
 const router = Router();
+
+// PUT /api/v1/orders/:orderId/move-table - Move order to a different table
+router.put(
+  "/:orderId/move-table",
+  authenticateToken,
+  requireRole(["WAITER", "CASHIER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
+  async (req: Request, res: Response) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { orderId } = req.params;
+      const { tableId } = req.body;
+
+      if (!tableId) {
+        return sendError(res, "VALIDATION_ERROR", "Table ID is required", 400);
+      }
+
+      logger.info(
+        `🔍 Moving order: ${orderId} to table: ${tableId} for tenant: ${tenantId}`
+      );
+
+      // Get the order to verify it exists and is active
+      const orderResult = await executeQuery(
+        `SELECT id, "orderNumber", status, "paymentStatus", "paymentMethod", "customerName", 
+                "totalAmount", "finalAmount", "tableNumber", "createdAt"
+         FROM orders 
+         WHERE id = $1 AND "tenantId" = $2`,
+        [orderId, tenantId]
+      );
+
+      if (orderResult.rows.length === 0) {
+        return sendError(res, "ORDER_NOT_FOUND", "Order not found", 404);
+      }
+
+      const order = orderResult.rows[0];
+      logger.info(
+        `📦 Found order: ${order.orderNumber} (${order.status}) at table: ${order.tableNumber}`
+      );
+
+      // Check if order is active
+      if (order.status !== "active") {
+        return sendError(
+          res,
+          "ORDER_NOT_ACTIVE",
+          "Only active orders can be moved",
+          400
+        );
+      }
+
+      // Check if order is already at the target table
+      if (order.tableNumber === tableId) {
+        return sendError(
+          res,
+          "ORDER_ALREADY_AT_TABLE",
+          "Order is already at the specified table",
+          400
+        );
+      }
+
+      // Verify the target table exists
+      const tableResult = await executeQuery(
+        'SELECT id, number FROM tables WHERE id = $1 AND "tenantId" = $2',
+        [tableId, tenantId]
+      );
+
+      if (tableResult.rows.length === 0) {
+        return sendError(
+          res,
+          "TABLE_NOT_FOUND",
+          "Target table not found or inactive",
+          404
+        );
+      }
+
+      const targetTable = tableResult.rows[0];
+      logger.info(`📋 Target table: ${targetTable.number}`);
+
+      // Move the order to the new table
+      const moveOrderResult = await executeQuery(
+        `UPDATE orders 
+          SET "tableNumber" = $1, 
+              "updatedAt" = $2
+          WHERE id = $3 AND "tenantId" = $4 AND status = 'active'`,
+        [tableId, new Date(), orderId, tenantId]
+      );
+
+      if (moveOrderResult.rowCount === 0) {
+        return sendError(
+          res,
+          "MOVE_ORDER_ERROR",
+          "Failed to move order - order may not be active",
+          400
+        );
+      }
+
+      logger.info(
+        `✅ Moved order ${orderId} from table ${order.tableNumber} to table ${tableId}`
+      );
+
+      // Get the updated order for response
+      const updatedOrderResult = await executeQuery(
+        `SELECT id, "orderNumber", status, "paymentStatus", "paymentMethod", "customerName", 
+                "totalAmount", "finalAmount", "tableNumber", "createdAt", "updatedAt"
+         FROM orders 
+         WHERE id = $1`,
+        [orderId]
+      );
+
+      const movedOrder = updatedOrderResult.rows[0];
+
+      const orderData = {
+        id: movedOrder.id,
+        orderNumber: movedOrder.orderNumber,
+        status: movedOrder.status,
+        paymentStatus: movedOrder.paymentStatus,
+        paymentMethod: movedOrder.paymentMethod,
+        customerName: movedOrder.customerName,
+        totalAmount: parseFloat(movedOrder.totalAmount?.toString() || "0"),
+        finalAmount: parseFloat(movedOrder.finalAmount?.toString() || "0"),
+        tableNumber: movedOrder.tableNumber,
+        createdAt: movedOrder.createdAt,
+        updatedAt: movedOrder.updatedAt,
+      };
+
+      logger.info(`✅ Order ${orderId} moved successfully to table ${tableId}`);
+      sendSuccess(
+        res,
+        {
+          order: orderData,
+          fromTable: order.tableNumber,
+          toTable: tableId,
+          movedBy:
+            (req as any).user?.firstName && (req as any).user?.lastName
+              ? `${(req as any).user.firstName} ${(req as any).user.lastName}`
+              : (req as any).user?.email || "Unknown",
+          movedAt: new Date(),
+        },
+        "Order moved successfully"
+      );
+    } catch (error) {
+      logger.error("Move order error:", error);
+      sendError(res, "MOVE_ORDER_ERROR", "Failed to move order");
+    }
+  }
+);
 
 // PUT /api/v1/orders/:orderId/close - Close a specific order
 router.put(
@@ -208,7 +352,7 @@ router.get(
         activeOrders,
         lastOrderAt:
           activeOrders.length > 0
-            ? activeOrders[activeOrders.length - 1].createdAt
+            ? activeOrders[activeOrders.length - 1]?.createdAt
             : null,
       };
 

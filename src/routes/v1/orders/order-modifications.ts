@@ -479,14 +479,23 @@ router.put(
       }
 
       // Emit single notification with all changes
-      emitOrderModificationEvent(tenantId, updatedFormattedOrder, {
-        addedItems: addedItems.length > 0 ? addedItems : undefined,
-        removedItems: removedItems.length > 0 ? removedItems : undefined,
-        modifiedItems: modifiedItems.length > 0 ? modifiedItems : undefined,
+      const eventData: any = {
         modificationType: modificationType,
         modifiedBy: getModifiedByUser(user),
         reason: "Batch modification",
-      });
+      };
+
+      if (addedItems.length > 0) {
+        eventData.addedItems = addedItems;
+      }
+      if (removedItems.length > 0) {
+        eventData.removedItems = removedItems;
+      }
+      if (modifiedItems.length > 0) {
+        eventData.modifiedItems = modifiedItems;
+      }
+
+      emitOrderModificationEvent(tenantId, updatedFormattedOrder, eventData);
 
       logger.info(
         `Batch order modification completed: ${id} - ${changes.length} changes applied`

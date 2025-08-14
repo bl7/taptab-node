@@ -94,17 +94,7 @@ export const createWithCheck = async (
 
     const insertQuery = `INSERT INTO "${tableName}" (${fieldNames}) VALUES (${placeholders}) RETURNING *`;
 
-    // DEBUG: Log the query being built
-    console.log("=== DATABASE INSERT DEBUG ===");
-    console.log("Table:", tableName);
-    console.log("Fields:", fields);
-    console.log("Field Names (quoted):", fieldNames);
-    console.log("Insert Query:", insertQuery);
-    console.log("Values:", values);
-    console.log("=============================");
-
     const result = await client.query(insertQuery, values);
-
     return result.rows[0];
   } catch (error) {
     if (error instanceof DatabaseError) throw error;

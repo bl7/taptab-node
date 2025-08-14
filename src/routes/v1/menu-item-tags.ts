@@ -116,11 +116,7 @@ router.post("/:menuItemId", async (req: Request, res: Response) => {
       VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
       RETURNING *
     `;
-    const result = await executeQuery(insertQuery, [
-      assignmentId,
-      menuItemId,
-      tagId,
-    ]);
+    await executeQuery(insertQuery, [assignmentId, menuItemId, tagId]);
 
     // Get the full tag details for response
     const fullTagQuery = `

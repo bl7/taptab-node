@@ -3,7 +3,7 @@ import { logger } from "../../utils/logger";
 import { getPublicTenantId } from "../../middleware/tenant";
 import { sendSuccess, sendError } from "../../utils/response";
 import { executeQuery } from "../../utils/database";
-import { socketManager } from "../../utils/socket";
+import { OrderService } from "../../services/OrderService";
 
 const router = Router();
 
@@ -37,7 +37,8 @@ router.post("/", async (req: Request, res: Response) => {
 
     const table = tableResult.rows[0];
 
-    // Verify all menu items exist
+    // Verify all menu items exist and get their prices
+    const orderItems = [];
     for (const item of items) {
       const menuItemResult = await executeQuery(
         'SELECT * FROM "menuItems" WHERE id = $1 AND "tenantId" = $2 AND "isActive" = true',
@@ -52,158 +53,35 @@ router.post("/", async (req: Request, res: Response) => {
           400
         );
       }
-    }
 
-    // Create order
-    const orderId = `order_${Date.now()}_${Math.random()
-      .toString(36)
-      .substr(2, 5)}`;
-    const orderNumber = `ORD-${Date.now()}`;
-
-    const orderData = {
-      id: orderId,
-      orderNumber,
-      tableNumber: table.id, // Store the table ID (UUID) in tableNumber column
-      totalAmount: 0,
-      taxAmount: 0,
-      discountAmount: 0,
-      finalAmount: 0,
-      tenantId,
-      createdById: null, // Public order, no user
-      status: "pending", // Order starts as pending - will be activated after payment
-      paymentStatus: "pending", // Payment not yet processed
-      paymentMethod: null, // Will be set when payment is confirmed
-      orderSource: "QR_ORDERING", // Always visible on table when active
-      sourceDetails: customerName || "QR Customer",
-      customerName: customerName || "Walk-in Customer",
-      customerPhone: customerPhone || "",
-      createdByUserId: null, // Public order, no user
-      createdByUserName: customerName || "QR Customer",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    // Calculate totals
-    let totalAmount = 0;
-    for (const item of items) {
-      const menuItem = await executeQuery(
-        'SELECT price FROM "menuItems" WHERE id = $1',
-        [item.menuItemId]
-      );
-      const price = parseFloat(menuItem.rows[0].price.toString());
-      const itemTotal = price * item.quantity;
-      totalAmount += itemTotal;
-    }
-
-    orderData.totalAmount = totalAmount;
-    orderData.finalAmount = totalAmount;
-
-    // Insert order
-    const orderFields = Object.keys(orderData);
-    const orderValues = Object.values(orderData);
-    const orderPlaceholders = orderValues
-      .map((_, index) => `$${index + 1}`)
-      .join(", ");
-    const orderFieldNames = orderFields.map((field) => `"${field}"`).join(", ");
-
-    const insertOrderQuery = `INSERT INTO orders (${orderFieldNames}) VALUES (${orderPlaceholders}) RETURNING *`;
-    logger.info(`🔍 Inserting order with status: ${orderData.status}`);
-    logger.info(`🔍 Order data:`, orderData);
-    const orderResult = await executeQuery(insertOrderQuery, orderValues);
-    const order = orderResult.rows[0];
-    logger.info(`🔍 Order created with status: ${order.status}`);
-
-    // Create order items
-    for (const item of items) {
-      const menuItem = await executeQuery(
-        'SELECT price FROM "menuItems" WHERE id = $1',
-        [item.menuItemId]
-      );
-      const price = parseFloat(menuItem.rows[0].price.toString());
-      const itemTotal = price * item.quantity;
-
-      const orderItemData = {
-        id: `oi_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        orderId: order.id,
+      const menuItem = menuItemResult.rows[0];
+      orderItems.push({
         menuItemId: item.menuItemId,
         quantity: item.quantity,
-        unitPrice: price,
-        totalPrice: itemTotal,
+        unitPrice: parseFloat(menuItem.price.toString()),
         notes: item.notes || "",
-        status: "pending",
-        createdAt: new Date(),
-      };
-
-      const itemFields = Object.keys(orderItemData);
-      const itemValues = Object.values(orderItemData);
-      const itemPlaceholders = itemValues
-        .map((_, index) => `$${index + 1}`)
-        .join(", ");
-      const itemFieldNames = itemFields.map((field) => `"${field}"`).join(", ");
-
-      const insertItemQuery = `INSERT INTO "orderItems" (${itemFieldNames}) VALUES (${itemPlaceholders})`;
-      await executeQuery(insertItemQuery, itemValues);
+      });
     }
 
-    // Note: Multiple orders can be placed on the same table
-    // No need to update table status or currentOrderId
+    // Create order using service
+    if (!tenantId) {
+      return sendError(res, "VALIDATION_ERROR", "Tenant ID is required", 400);
+    }
 
-    // Get order with items for response
-    const orderWithItemsResult = await executeQuery(
-      `
-      SELECT o.*, oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi."totalPrice", oi.notes,
-             mi.name as menu_item_name
-      FROM orders o
-      LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
-      LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
-      WHERE o.id = $1
-    `,
-      [order.id]
-    );
-
-    const orderRows = orderWithItemsResult.rows;
-    logger.info(`🔍 Retrieved order status from DB: ${orderRows[0].status}`);
-    const formattedOrder = {
-      id: orderRows[0].id,
-      orderNumber: orderRows[0].orderNumber,
-      tableId: orderRows[0].tableId,
-      totalAmount: parseFloat(orderRows[0].totalAmount.toString()),
-      finalAmount: parseFloat(orderRows[0].finalAmount.toString()),
-      status: orderRows[0].status,
-      customerName: orderRows[0].customerName,
-      customerPhone: orderRows[0].customerPhone,
-      items: orderRows
-        .filter((row) => row.item_id)
-        .map((row) => ({
-          id: row.item_id,
-          menuItemId: row.menuItemId,
-          menuItemName: row.menu_item_name,
-          quantity: row.quantity,
-          price: parseFloat(row.unitPrice.toString()),
-          total: parseFloat(row.totalPrice.toString()),
-          notes: row.notes,
-        })),
-      createdAt: orderRows[0].createdAt,
-      updatedAt: orderRows[0].updatedAt,
+    const orderData = {
+      customerName: customerName || "Walk-in Customer",
+      customerPhone: customerPhone || "",
+      tableNumber: table.id, // Store the table ID (UUID) in tableNumber column
+      tenantId,
+      orderItems,
+      orderSource: "QR_ORDERING",
+      sourceDetails: customerName || "QR Customer",
     };
 
-    // Emit WebSocket event for admin and kitchen staff only for active orders
-    // pending orders will be emitted when payment is confirmed and status changes to active
-    if (formattedOrder.status === "active") {
-      try {
-        socketManager.emitNewOrder(tenantId, formattedOrder);
-      } catch (error) {
-        logger.error("Failed to emit WebSocket event:", error);
-        // Don't fail the order creation if WebSocket fails
-      }
-    } else {
-      logger.info(
-        `Order ${formattedOrder.orderNumber} created with status ${formattedOrder.status} - WebSocket notification will be sent when payment is confirmed and order becomes active`
-      );
-    }
+    const formattedOrder = await OrderService.createOrder(orderData);
 
     logger.info(
-      `Public order created: ${order.orderNumber} for table ${tableNumber}`
+      `Public order created: ${formattedOrder.orderNumber} for table ${tableNumber}`
     );
     sendSuccess(
       res,

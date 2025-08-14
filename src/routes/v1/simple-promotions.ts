@@ -4,7 +4,7 @@ import { getTenantId } from "../../middleware/tenant";
 import { authenticateToken, requireRole } from "../../middleware/auth";
 import { sendSuccess, sendError } from "../../utils/response";
 import { executeQuery } from "../../utils/database";
-import { SimplePromotions, Promotion } from "../../services/simple-promotions";
+import { SimplePromotions } from "../../services/simple-promotions";
 
 const router = Router();
 
@@ -131,16 +131,6 @@ router.post(
         );
       }
 
-      // DEBUG: Log what we're about to insert
-      console.log("DEBUG - About to insert promotion with values:", {
-        buy_target_type,
-        buy_target_category_id,
-        get_target_type,
-        get_target_category_id,
-        target_type,
-        target_category_id,
-      });
-
       // COMPREHENSIVE VALIDATION: Check ALL category IDs exist, regardless of target type
       const allCategoryIds = [
         target_category_id,
@@ -148,25 +138,14 @@ router.post(
         get_target_category_id,
       ].filter((id) => id); // Remove null/undefined values
 
-      console.log("DEBUG - Category IDs to validate:", allCategoryIds);
-      console.log("DEBUG - Current tenantId:", tenantId);
-
       for (const categoryId of allCategoryIds) {
         if (categoryId) {
-          console.log(`DEBUG - Validating category ID: ${categoryId}`);
           try {
             const categoryCheck = await executeQuery(
               'SELECT id FROM categories WHERE id = $1 AND "tenantId" = $2',
               [categoryId, tenantId]
             );
-            console.log(
-              `DEBUG - Category check result for ${categoryId}:`,
-              categoryCheck.rows
-            );
             if (categoryCheck.rows.length === 0) {
-              console.log(
-                `DEBUG - Category ${categoryId} not found, returning error`
-              );
               return sendError(
                 res,
                 "VALIDATION_ERROR",
@@ -174,10 +153,6 @@ router.post(
               );
             }
           } catch (error) {
-            console.log(
-              `DEBUG - Error checking category ${categoryId}:`,
-              error
-            );
             const errorMessage =
               error instanceof Error ? error.message : String(error);
             return sendError(
@@ -188,8 +163,6 @@ router.post(
           }
         }
       }
-
-      console.log("DEBUG - All category validations passed successfully");
 
       if (type === "HAPPY_HOUR" && (!start_time || !end_time)) {
         return sendError(
@@ -534,7 +507,7 @@ router.get(
 router.get("/public/active", async (req: Request, res: Response) => {
   try {
     // Get tenant from query parameter or subdomain
-    const tenantId = req.query.tenantId as string;
+    const tenantId = req.query["tenantId"] as string;
 
     if (!tenantId) {
       return sendError(res, "VALIDATION_ERROR", "tenantId is required");

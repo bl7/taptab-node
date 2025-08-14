@@ -19,7 +19,7 @@ import prometheusMiddleware from "express-prometheus-middleware";
 import { errorHandler } from "./middleware/errorHandler";
 import { notFoundHandler } from "./middleware/notFoundHandler";
 import { authenticateToken } from "./middleware/auth";
-import { tenantMiddleware } from "./middleware/tenant";
+// import { tenantMiddleware } from "./middleware/tenant";
 
 // Import routes
 import authRoutes from "./routes/v1/auth";
@@ -66,11 +66,6 @@ import debugRoutes from "./routes/v1/debug-order";
 import { logger } from "./utils/logger";
 import { socketManager } from "./utils/socket";
 import { CleanupService } from "./utils/cleanup";
-
-// Debug: Check if env vars are loaded
-console.log("DATABASE_URL exists:", !!process.env["DATABASE_URL"]);
-console.log("JWT_SECRET exists:", !!process.env["JWT_SECRET"]);
-console.log("PORT:", process.env["PORT"] || 5050);
 
 // Import database utilities
 import { executeQuery } from "./utils/database";
@@ -178,15 +173,19 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Apply rate limiting to all routes
-// DISABLED: Not suitable for restaurant environments with multiple users per IP
-// app.use(limiter);
-// app.use(speedLimiter);
+// Configure rate limiting for restaurant environments
+// Allow higher limits for restaurant staff but still protect against abuse
+app.use(limiter);
+
+// Apply speed limiting to slow down excessive requests
+app.use(speedLimiter);
 
 // Health check endpoint
-app.get("/health", async (req, res) => {
+app.get("/health", async (_req, res) => {
   try {
-    // Check database connection
+    // Test database connection
     await executeQuery("SELECT 1");
+    logger.info("Database connected successfully");
 
     res.status(200).json({
       success: true,
@@ -198,7 +197,6 @@ app.get("/health", async (req, res) => {
         version: process.env["npm_package_version"] || "1.0.0",
       },
       message: "Service is healthy",
-      timestamp: new Date().toISOString(),
     });
   } catch (error) {
     logger.error("Health check failed:", error);
@@ -217,45 +215,36 @@ app.get("/health", async (req, res) => {
 const apiVersion = process.env["API_VERSION"] || "v1";
 
 // Debug endpoint to see connected WebSocket users
-app.get("/api/debug/connected-users", (req, res) => {
+app.get("/api/debug/connected-users", (_req, res) => {
+  const connectedUsers = socketManager.getConnectedUsers();
   res.json({
     success: true,
     data: {
-      connectedUsers: socketManager.getConnectedUsers(),
+      connectedUsers,
+      totalConnections: Object.keys(connectedUsers).length,
     },
   });
 });
 
 // Debug endpoint to test WebSocket notifications
-app.post("/api/debug/test-notification", (req, res) => {
+app.post("/api/debug/test-notification", (_req, res) => {
   try {
-    const { tenantId, message } = req.body;
-
-    if (!tenantId) {
-      return res.status(400).json({
-        success: false,
-        error: "tenantId is required",
-      });
-    }
-
-    const testData = {
-      type: "TEST_NOTIFICATION",
-      message: message || "Test notification from server",
+    // Use the correct method from socketManager
+    socketManager.ioInstance?.emit("test-notification", {
+      message: "Test notification from debug endpoint",
       timestamp: new Date().toISOString(),
-    };
-
-    // Emit to all users for testing
-    socketManager.ioInstance?.emit("newOrder", testData);
-
+    });
     res.json({
       success: true,
       message: "Test notification sent",
-      data: testData,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: (error as Error).message,
+      error: {
+        code: "NOTIFICATION_ERROR",
+        message: "Failed to send test notification",
+      },
     });
   }
 });
@@ -268,111 +257,46 @@ app.use(`/api/${apiVersion}/public`, publicTenantRoutes);
 
 // Authenticated routes for admin/staff use (with authentication)
 app.use(`/api/${apiVersion}/auth`, authRoutes);
-app.use(
-  `/api/${apiVersion}/menu`,
-  authenticateToken,
-  tenantMiddleware,
-  menuRoutes
-);
-app.use(
-  `/api/${apiVersion}/orders`,
-  authenticateToken,
-  tenantMiddleware,
-  orderRoutes
-);
-app.use(
-  `/api/${apiVersion}/tables`,
-  authenticateToken,
-  tenantMiddleware,
-  tableRoutes
-);
-app.use(
-  `/api/${apiVersion}/locations`,
-  authenticateToken,
-  tenantMiddleware,
-  locationRoutes
-);
+app.use(`/api/${apiVersion}/menu`, authenticateToken, menuRoutes);
+app.use(`/api/${apiVersion}/orders`, authenticateToken, orderRoutes);
+app.use(`/api/${apiVersion}/tables`, authenticateToken, tableRoutes);
+app.use(`/api/${apiVersion}/locations`, authenticateToken, locationRoutes);
 app.use(
   `/api/${apiVersion}/table-layouts`,
   authenticateToken,
-  tenantMiddleware,
   tableLayoutRoutes
 );
-app.use(
-  `/api/${apiVersion}/analytics`,
-  authenticateToken,
-  tenantMiddleware,
-  analyticsRoutes
-);
-app.use(
-  `/api/${apiVersion}/settings`,
-  authenticateToken,
-  tenantMiddleware,
-  settingsRoutes
-);
+app.use(`/api/${apiVersion}/analytics`, authenticateToken, analyticsRoutes);
+app.use(`/api/${apiVersion}/settings`, authenticateToken, settingsRoutes);
 app.use(`/api/${apiVersion}/tenants`, authenticateToken, tenantRoutes);
-app.use(
-  `/api/${apiVersion}/upload`,
-  authenticateToken,
-  tenantMiddleware,
-  uploadRoutes
-);
-app.use(
-  `/api/${apiVersion}/dashboard`,
-  authenticateToken,
-  tenantMiddleware,
-  dashboardRoutes
-);
+app.use(`/api/${apiVersion}/upload`, authenticateToken, uploadRoutes);
+app.use(`/api/${apiVersion}/dashboard`, authenticateToken, dashboardRoutes);
 
 // Kitchen routes for order management
-app.use(
-  `/api/${apiVersion}/kitchen`,
-  authenticateToken,
-  tenantMiddleware,
-  kitchenRoutes
-);
+app.use(`/api/${apiVersion}/kitchen`, authenticateToken, kitchenRoutes);
 
 // Ingredient and allergen routes
-app.use(
-  `/api/${apiVersion}/allergens`,
-  authenticateToken,
-  tenantMiddleware,
-  allergensRoutes
-);
-app.use(
-  `/api/${apiVersion}/ingredients`,
-  authenticateToken,
-  tenantMiddleware,
-  ingredientsRoutes
-);
+app.use(`/api/${apiVersion}/allergens`, authenticateToken, allergensRoutes);
+app.use(`/api/${apiVersion}/ingredients`, authenticateToken, ingredientsRoutes);
 app.use(
   `/api/${apiVersion}/ingredient-allergens`,
   authenticateToken,
-  tenantMiddleware,
   ingredientAllergensRoutes
 );
 app.use(
   `/api/${apiVersion}/menu-item-ingredients`,
   authenticateToken,
-  tenantMiddleware,
   menuItemIngredientsRoutes
 );
-app.use(
-  `/api/${apiVersion}/menu-tags`,
-  authenticateToken,
-  tenantMiddleware,
-  menuTagsRoutes
-);
+app.use(`/api/${apiVersion}/menu-tags`, authenticateToken, menuTagsRoutes);
 app.use(
   `/api/${apiVersion}/menu-item-tags`,
   authenticateToken,
-  tenantMiddleware,
   menuItemTagsRoutes
 );
 app.use(
   `/api/${apiVersion}/simple-promotions`,
   authenticateToken,
-  tenantMiddleware,
   simplePromotionsRoutes
 );
 
@@ -416,12 +340,6 @@ process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 const startServer = async () => {
   try {
     // Test database connection
-    console.log("Testing database connection...");
-    console.log(
-      "DATABASE_URL:",
-      process.env["DATABASE_URL"]?.substring(0, 20) + "..."
-    );
-
     await executeQuery("SELECT 1");
     logger.info("Database connected successfully");
 

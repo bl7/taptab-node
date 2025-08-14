@@ -1,8 +1,9 @@
 import { Router, Request, Response } from "express";
-import { logger } from "../../utils/logger";
 import { authenticateToken, requireRole } from "../../middleware/auth";
 import { sendSuccess, sendError } from "../../utils/response";
 import { CleanupService } from "../../utils/cleanup";
+import { executeQuery } from "../../utils/database";
+import { logger } from "../../utils/logger";
 
 const router = Router();
 
@@ -11,7 +12,7 @@ router.get(
   "/pending-orders",
   authenticateToken,
   requireRole(["TENANT_ADMIN", "MANAGER"]),
-  async (req: Request, res: Response) => {
+  async (_req: Request, res: Response) => {
     try {
       const count = await CleanupService.getPendingOrdersCount();
 
@@ -31,9 +32,9 @@ router.get(
   "/abandoned-orders",
   authenticateToken,
   requireRole(["TENANT_ADMIN", "MANAGER"]),
-  async (req: Request, res: Response) => {
+  async (_req: Request, res: Response) => {
     try {
-      const maxAgeMinutes = parseInt(req.query.maxAgeMinutes as string) || 30;
+      const maxAgeMinutes = parseInt(_req.query["maxAgeMinutes"] as string) || 30;
       const abandonedOrders = await CleanupService.getAbandonedPendingOrders(
         maxAgeMinutes
       );
@@ -56,9 +57,9 @@ router.post(
   "/run",
   authenticateToken,
   requireRole(["TENANT_ADMIN", "MANAGER"]),
-  async (req: Request, res: Response) => {
+  async (_req: Request, res: Response) => {
     try {
-      const maxAgeMinutes = parseInt(req.body.maxAgeMinutes as string) || 30;
+      const maxAgeMinutes = parseInt(_req.body.maxAgeMinutes as string) || 30;
       const cleanedCount = await CleanupService.cleanupPendingOrders(
         maxAgeMinutes
       );
@@ -71,6 +72,36 @@ router.post(
     } catch (error) {
       logger.error("Error during manual cleanup:", error);
       sendError(res, "CLEANUP_ERROR", "Failed to run cleanup");
+    }
+  }
+);
+
+// GET /api/v1/admin/cleanup/orders - Clean up old orders
+router.get(
+  "/orders",
+  authenticateToken,
+  requireRole(["SUPER_ADMIN"]),
+  async (_req: Request, res: Response) => {
+    try {
+      const maxAgeMinutes =
+        parseInt(_req.query["maxAgeMinutes"] as string) || 30;
+      const cutoffTime = new Date(Date.now() - maxAgeMinutes * 60 * 1000);
+
+      // Delete old orders
+      const result = await executeQuery(
+        'DELETE FROM orders WHERE "createdAt" < $1 AND status IN ($2, $3) RETURNING id',
+        [cutoffTime, "completed", "cancelled"]
+      );
+
+      logger.info(`Cleaned up ${result.rows.length} old orders`);
+      sendSuccess(
+        res,
+        { deletedCount: result.rows.length },
+        "Cleanup completed successfully"
+      );
+    } catch (error) {
+      logger.error("Admin cleanup error:", error);
+      sendError(res, "CLEANUP_ERROR", "Failed to perform cleanup");
     }
   }
 );

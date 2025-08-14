@@ -3,7 +3,7 @@ import { logger } from '../../utils/logger';
 import { getTenantId } from '../../middleware/tenant';
 import { authenticateToken, requireRole } from '../../middleware/auth';
 import { sendSuccess, sendError, sendNotFound } from '../../utils/response';
-import { findById, updateWithCheck, executeQuery } from '../../utils/database';
+import { updateWithCheck, executeQuery } from '../../utils/database';
 
 const router = Router();
 

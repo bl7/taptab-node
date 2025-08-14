@@ -4,10 +4,9 @@ import { getTenantId } from "../../../middleware/tenant";
 import { authenticateToken, requireRole } from "../../../middleware/auth";
 import { sendSuccess, sendError } from "../../../utils/response";
 import { executeQuery } from "../../../utils/database";
-import {
-  formatOrderFromRows,
-  getOrderWithItemsQuery,
-} from "./helpers/order-formatters";
+// import {
+//   getOrderWithItemsQuery,
+// } from "./helpers/order-formatters";
 import { validateOrderExists } from "./helpers/validation";
 
 const router = Router();
@@ -43,7 +42,7 @@ router.put(
       const user = (req as any).user;
 
       // Update order status
-      const updateResult = await executeQuery(
+      await executeQuery(
         `UPDATE orders 
          SET "paymentStatus" = $1,
              "paymentMethod" = $2,
@@ -63,29 +62,27 @@ router.put(
       );
 
       // Get order with items for notification
-      const orderWithItemsResult = await executeQuery(
-        getOrderWithItemsQuery(),
-        [id]
-      );
+      // const orderWithItemsResult = await executeQuery(
+      //   getOrderWithItemsQuery(),
+      //   [id]
+      // );
 
-      const order = formatOrderFromRows(orderWithItemsResult.rows);
+      // const order = formatOrderFromRows(orderWithItemsResult.rows);
 
       // Emit WebSocket event for order payment
       try {
-        const paidByUser =
-          user?.firstName && user?.lastName
-            ? `${user.firstName} ${user.lastName}`
-            : user?.id || paidBy || "Unknown";
-
+        // const paidByUser =
+        //   user?.firstName && user?.lastName
+        //     ? `${user.firstName} ${user.lastName}`
+        //     : user?.id || paidBy || "Unknown";
         // Format order for response
-        const formattedOrder = {
-          ...order,
-          paymentStatus: "PAID",
-          paymentMethod: paymentMethod,
-          paidBy: paidByUser,
-          paidAt: new Date(),
-        };
-
+        // const formattedOrder = {
+        //   ...order,
+        //   paymentStatus: "PAID",
+        //   paymentMethod: paymentMethod,
+        //   paidBy: paidByUser,
+        //   paidAt: new Date(),
+        // };
         // socketManager.emitOrderPaid(tenantId, formattedOrder, paymentMethod, paidByUser);
         // TODO: Implement emitOrderPaid method in SocketManager if needed
       } catch (error) {

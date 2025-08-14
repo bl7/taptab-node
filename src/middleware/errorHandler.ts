@@ -1,5 +1,5 @@
-import { Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger';
+import { Request, Response, NextFunction } from "express";
+import { logger } from "../utils/logger";
 
 export interface AppError extends Error {
   statusCode?: number;
@@ -13,19 +13,26 @@ export const errorHandler = (
   _next: NextFunction
 ) => {
   const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
+  const message = err.message || "Internal Server Error";
 
   // Log error
-  logger.error(`${statusCode} - ${message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
+  logger.error(
+    `${statusCode} - ${message} - ${req.originalUrl} - ${req.method} - ${req.ip}`
+  );
 
   // Don't leak error details in production
   const errorResponse = {
-    status: 'error',
-    message: process.env.NODE_ENV === 'production' && statusCode === 500 
-      ? 'Internal Server Error' 
-      : message,
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+    success: false,
+    error: {
+      code: (err as any).code || "INTERNAL_ERROR",
+      message:
+        process.env["NODE_ENV"] === "production" && statusCode === 500
+          ? "Internal server error"
+          : err.message || "An error occurred",
+    },
+    timestamp: new Date().toISOString(),
+    ...(process.env["NODE_ENV"] === "development" && { stack: err.stack }),
   };
 
   res.status(statusCode).json(errorResponse);
-}; 
+};

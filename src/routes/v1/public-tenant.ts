@@ -94,7 +94,7 @@ router.get(
 );
 
 // Test endpoint to verify the route is working
-router.get("/test", async (req: Request, res: Response) => {
+router.get("/test", async (_req: Request, res: Response) => {
   logger.info("🧪 Test endpoint called");
   sendSuccess(res, { message: "Test endpoint working" }, "Test successful");
 });

@@ -72,6 +72,236 @@ router.get(
   }
 );
 
+// GET /api/orders/cancelled - Get all cancelled orders with details and date filtering
+router.get(
+  "/cancelled",
+  authenticateToken,
+  requireRole(["WAITER", "CASHIER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
+  async (req: Request, res: Response) => {
+    try {
+      const tenantId = getTenantId(req);
+      const {
+        limit = "50",
+        offset = "0",
+        startDate,
+        endDate,
+        period,
+      } = req.query;
+
+      // Handle date filtering
+      let start: Date | undefined;
+      let end: Date | undefined;
+
+      if (startDate && endDate) {
+        // Use custom date range
+        start = new Date(startDate as string);
+        end = new Date(endDate as string);
+      } else if (period) {
+        // Use period-based filtering with proper UTC handling
+        const now = new Date();
+
+        if (period === "today") {
+          // Start of today in UTC
+          start = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+          );
+          // End of today in UTC (end of day)
+          end = new Date(
+            Date.UTC(
+              now.getUTCFullYear(),
+              now.getUTCMonth(),
+              now.getUTCDate() + 1
+            )
+          );
+        } else if (period === "yesterday") {
+          // Start of yesterday in UTC
+          start = new Date(
+            Date.UTC(
+              now.getUTCFullYear(),
+              now.getUTCMonth(),
+              now.getUTCDate() - 1
+            )
+          );
+          // End of yesterday in UTC
+          end = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+          );
+        } else if (period === "week") {
+          // 7 days ago from start of today
+          const startOfToday = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+          );
+          start = new Date(startOfToday.getTime() - 7 * 24 * 60 * 60 * 1000);
+          end = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000); // End of today
+        } else if (period === "month") {
+          // 30 days ago from start of today
+          const startOfToday = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+          );
+          start = new Date(startOfToday.getTime() - 30 * 24 * 60 * 60 * 1000);
+          end = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000); // End of today
+        } else if (period === "year") {
+          // 365 days ago from start of today
+          const startOfToday = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+          );
+          start = new Date(startOfToday.getTime() - 365 * 24 * 60 * 60 * 1000);
+          end = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000); // End of today
+        } else {
+          // Default to last 7 days
+          const startOfToday = new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+          );
+          start = new Date(startOfToday.getTime() - 7 * 24 * 60 * 60 * 1000);
+          end = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000); // End of today
+        }
+      } else {
+        // Default to last 30 days if no date filter provided
+        const now = new Date();
+        const startOfToday = new Date(
+          Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+        );
+        start = new Date(startOfToday.getTime() - 30 * 24 * 60 * 60 * 1000);
+        end = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000); // End of today
+      }
+
+      let query = `
+      SELECT o.*, 
+             oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi.notes,
+             mi.name as menu_item_name,
+             o."orderSource", o."sourceDetails", o."createdByUserId", o."createdByUserName",
+             o."isDelivery", o."deliveryAddress", o."deliveryPlatform", o."deliveryOrderId",
+             o."customerAddress", 
+             o."estimatedDeliveryTime", o."specialInstructions",
+             o."paymentStatus" as "paymentStatus", o."paymentMethod" as "paymentMethod", o."paidAt" as "paidAt",
+             o."cancellationReason", o."cancelledByUserId", o."cancelledAt",
+             u."firstName" as waiter_first_name, u."lastName" as waiter_last_name,
+             cu."firstName" as cancelled_by_first_name, cu."lastName" as cancelled_by_last_name
+      FROM orders o
+      LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
+      LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+      LEFT JOIN users u ON o."createdById" = u.id
+      LEFT JOIN users cu ON o."cancelledByUserId" = cu.id
+      WHERE o."tenantId" = $1 AND o.status = 'CANCELLED'
+    `;
+
+      const values: any[] = [tenantId];
+      let paramIndex = 2;
+
+      // Add date filters
+      if (start) {
+        query += ` AND o."cancelledAt" >= $${paramIndex++}`;
+        values.push(start.toISOString());
+      }
+      if (end) {
+        query += ` AND o."cancelledAt" <= $${paramIndex++}`;
+        values.push(end.toISOString());
+      }
+
+      query += ` ORDER BY o."cancelledAt" DESC, o."createdAt" DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+      values.push(parseInt(limit as string), parseInt(offset as string));
+
+      const result = await executeQuery(query, values);
+      const formattedOrders = formatOrdersFromRows(result.rows);
+
+      // Get total count for pagination with same date filters
+      let countQuery = `
+        SELECT COUNT(*) as total
+        FROM orders 
+        WHERE "tenantId" = $1 AND status = 'CANCELLED'
+      `;
+      const countValues: any[] = [tenantId];
+      let countParamIndex = 2;
+
+      if (start) {
+        countQuery += ` AND "cancelledAt" >= $${countParamIndex++}`;
+        countValues.push(start.toISOString());
+      }
+      if (end) {
+        countQuery += ` AND "cancelledAt" <= $${countParamIndex++}`;
+        countValues.push(end.toISOString());
+      }
+
+      const countResult = await executeQuery(countQuery, countValues);
+      const totalCount = parseInt(countResult.rows[0].total);
+
+      logger.info(
+        `Retrieved ${
+          formattedOrders.length
+        } cancelled orders out of ${totalCount} total for period: ${start?.toISOString()} to ${end?.toISOString()}`
+      );
+
+      sendSuccess(res, {
+        orders: formattedOrders,
+        pagination: {
+          total: totalCount,
+          limit: parseInt(limit as string),
+          offset: parseInt(offset as string),
+          hasMore:
+            parseInt(offset as string) + parseInt(limit as string) < totalCount,
+        },
+        filters: {
+          startDate: start?.toISOString(),
+          endDate: end?.toISOString(),
+          period: period || null,
+        },
+      });
+    } catch (error) {
+      logger.error("Get cancelled orders error:", error);
+      sendError(res, "FETCH_ERROR", "Failed to fetch cancelled orders");
+    }
+  }
+);
+
+// GET /api/orders/:orderId - Get single order by ID
+router.get(
+  "/:orderId",
+  authenticateToken,
+  requireRole(["WAITER", "CASHIER", "KITCHEN", "MANAGER", "TENANT_ADMIN"]),
+  async (req: Request, res: Response) => {
+    try {
+      const tenantId = getTenantId(req);
+      const { orderId } = req.params;
+
+      if (!orderId) {
+        return sendError(res, "VALIDATION_ERROR", "Order ID is required", 400);
+      }
+
+      const query = `
+      SELECT o.*, 
+             oi.id as item_id, oi."menuItemId", oi.quantity, oi."unitPrice", oi.notes,
+             mi.name as menu_item_name,
+             o."orderSource", o."sourceDetails", o."createdByUserId", o."createdByUserName",
+             o."isDelivery", o."deliveryAddress", o."deliveryPlatform", o."deliveryOrderId",
+             o."customerAddress", 
+             o."estimatedDeliveryTime", o."specialInstructions",
+             o."paymentStatus" as "paymentStatus", o."paymentMethod" as "paymentMethod", o."paidAt" as "paidAt",
+             u."firstName" as waiter_first_name, u."lastName" as waiter_last_name
+      FROM orders o
+      LEFT JOIN "orderItems" oi ON o.id = oi."orderId"
+      LEFT JOIN "menuItems" mi ON oi."menuItemId" = mi.id
+      LEFT JOIN users u ON o."createdById" = u.id
+      WHERE o.id = $1 AND o."tenantId" = $2
+      ORDER BY oi."createdAt" ASC
+    `;
+
+      const result = await executeQuery(query, [orderId, tenantId]);
+
+      if (result.rows.length === 0) {
+        return sendError(res, "ORDER_NOT_FOUND", "Order not found", 404);
+      }
+
+      const formattedOrders = formatOrdersFromRows(result.rows);
+      const order = formattedOrders[0];
+
+      sendSuccess(res, { order });
+    } catch (error) {
+      logger.error("Get order error:", error);
+      sendError(res, "FETCH_ERROR", "Failed to fetch order");
+    }
+  }
+);
+
 // POST /api/orders - Create new order
 router.post(
   "/",
@@ -86,15 +316,15 @@ router.post(
         orderSource,
         customerName,
         customerPhone,
-        customerEmail,
+        // customerEmail,
         specialInstructions,
         isDelivery = false,
         deliveryAddress,
         deliveryPlatform,
         deliveryOrderId,
         estimatedDeliveryTime,
-        priority = "normal",
-        paymentMethod,
+        // priority = "normal",
+        // paymentMethod,
         taxAmount = 0,
         discountAmount = 0,
       } = req.body;
@@ -260,7 +490,7 @@ router.post(
   }
 );
 
-// PUT /api/orders/:id - Update order status
+// PUT /api/orders/:id - Update order status and other fields
 router.put(
   "/:id",
   authenticateToken,
@@ -269,7 +499,7 @@ router.put(
     try {
       const tenantId = getTenantId(req);
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, orderSource, paymentStatus } = req.body;
 
       if (!id) {
         return sendError(res, "VALIDATION_ERROR", "ID is required", 400);
@@ -294,11 +524,26 @@ router.put(
       const existingOrder = await validateOrderExists(id, tenantId, res);
       if (!existingOrder) return;
 
-      // Update order status
-      const orderResult = await executeQuery(
-        'UPDATE orders SET status = $1, "updatedAt" = $2 WHERE id = $3 RETURNING *',
-        [status.toUpperCase(), new Date(), id]
-      );
+      // Build update query dynamically
+      let updateQuery = 'UPDATE orders SET status = $1, "updatedAt" = $2';
+      let queryValues = [status.toUpperCase(), new Date()];
+      let paramIndex = 3;
+
+      if (orderSource) {
+        updateQuery += `, "orderSource" = $${paramIndex++}`;
+        queryValues.push(orderSource);
+      }
+
+      if (paymentStatus) {
+        updateQuery += `, "paymentStatus" = $${paramIndex++}`;
+        queryValues.push(paymentStatus.toUpperCase());
+      }
+
+      updateQuery += ` WHERE id = $${paramIndex} RETURNING *`;
+      queryValues.push(id);
+
+      // Update order
+      const orderResult = await executeQuery(updateQuery, queryValues);
 
       const order = orderResult.rows[0];
 
@@ -310,15 +555,11 @@ router.put(
 
       const formattedOrder = formatOrderFromRows(orderWithItemsResult.rows);
 
-      logger.info(`Order status updated: ${order.orderNumber} - ${status}`);
-      sendSuccess(
-        res,
-        { order: formattedOrder },
-        "Order status updated successfully"
-      );
+      logger.info(`Order updated: ${order.orderNumber} - ${status}`);
+      sendSuccess(res, { order: formattedOrder }, "Order updated successfully");
     } catch (error) {
-      logger.error("Update order status error:", error);
-      sendError(res, "UPDATE_ERROR", "Failed to update order status");
+      logger.error("Update order error:", error);
+      sendError(res, "UPDATE_ERROR", "Failed to update order");
     }
   }
 );
@@ -375,7 +616,7 @@ router.put(
         return sendError(res, "NOT_FOUND", "Order item not found", 404);
       }
 
-      const orderItem = orderItemResult.rows[0];
+      // const orderItem = orderItemResult.rows[0];
 
       // Update the order item status in the database
       await executeQuery(

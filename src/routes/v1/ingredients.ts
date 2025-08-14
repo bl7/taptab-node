@@ -4,7 +4,6 @@ import { getTenantId } from "../../middleware/tenant";
 import { authenticateToken, requireRole } from "../../middleware/auth";
 import { sendSuccess, sendError } from "../../utils/response";
 import {
-  findMany,
   createWithCheck,
   updateWithCheck,
   deleteWithCheck,

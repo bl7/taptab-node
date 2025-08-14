@@ -4,7 +4,7 @@ import { logger } from '../../utils/logger';
 const router = Router();
 
 // Get all tenants
-router.get('/', async (req: any, res: any) => {
+router.get('/', async (_req: any, res: any) => {
   try {
     res.json({
       success: true,

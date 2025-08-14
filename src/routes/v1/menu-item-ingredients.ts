@@ -37,18 +37,17 @@ router.get(
         return sendError(res, "NOT_FOUND", "Menu item not found", 404);
       }
 
-      // Get ingredients for the menu item
-      const query = `
-      SELECT i.*, mii.quantity, mii.unit
-      FROM ingredients i
-      INNER JOIN "menuItemIngredients" mii ON i.id = mii."ingredientId"
-      WHERE mii."menuItemId" = $1 AND i."tenantId" = $2
-      ORDER BY i.name ASC
-    `;
+      // Get all ingredients for the menu item
+      const ingredientsResult = await executeQuery(
+        `SELECT mii.*, i.name as ingredient_name, i.description as ingredient_description, 
+                i.unit as ingredient_unit, i.costPerUnit
+         FROM "menuItemIngredients" mii
+         JOIN ingredients i ON mii."ingredientId" = i.id
+         WHERE mii."menuItemId" = $1`,
+        [menuItemId]
+      );
 
-      const result = await executeQuery(query, [menuItemId, tenantId]);
-
-      const formattedIngredients = result.rows.map((row: any) => ({
+      const formattedIngredients = ingredientsResult.rows.map((row: any) => ({
         id: row.id,
         name: row.name,
         description: row.description,
@@ -184,7 +183,6 @@ router.put(
   requireRole(["TENANT_ADMIN", "MANAGER"]),
   async (req: Request, res: Response) => {
     try {
-      const tenantId = getTenantId(req);
       const { menuItemId, ingredientId } = req.params;
       const { quantity, unit } = req.body;
 
@@ -259,7 +257,6 @@ router.delete(
   requireRole(["TENANT_ADMIN", "MANAGER"]),
   async (req: Request, res: Response) => {
     try {
-      const tenantId = getTenantId(req);
       const { menuItemId, ingredientId } = req.params;
 
       if (!menuItemId || !ingredientId) {

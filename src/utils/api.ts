@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { logger } from "./logger";
 
 const pool = new Pool({
   host: process.env["DB_HOST"],
@@ -19,12 +20,12 @@ const pool = new Pool({
   // acquireTimeoutMillis: 3000, // Timeout for acquiring connection (not valid in pg pool config)
 });
 
-// Test query to confirm connection
+// Test database connection
 pool.query("SELECT current_database()", (err, res) => {
   if (err) {
-    console.error("❌ DB Test Failed:", err);
+    logger.error("Database connection failed:", err);
   } else {
-    console.log("✅ Connected to DB:", res.rows[0].current_database);
+    logger.info(`Connected to database: ${res.rows[0].current_database}`);
   }
 });
 

@@ -7,6 +7,45 @@ import { executeQuery } from "../../utils/database";
 
 const router = Router();
 
+// GET /api/v1/debug/tenants - Debug all tenants
+router.get(
+  "/tenants",
+  authenticateToken,
+  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  async (req: Request, res: Response) => {
+    try {
+      logger.info(`🔍 Debugging all tenants`);
+
+      // Get all tenants
+      const tenantsResult = await executeQuery(
+        `SELECT id, name, slug, "isActive", "createdAt" FROM tenants ORDER BY "createdAt" DESC`
+      );
+
+      const tenants = tenantsResult.rows.map((tenant) => ({
+        id: tenant.id,
+        name: tenant.name,
+        slug: tenant.slug,
+        isActive: tenant.isActive,
+        createdAt: tenant.createdAt,
+      }));
+
+      logger.info(`📊 Found ${tenants.length} tenants:`, tenants);
+
+      sendSuccess(res, {
+        tenants,
+        count: tenants.length,
+        debug: {
+          currentUserTenantId: (req as any).user?.tenantId,
+          currentUserEmail: (req as any).user?.email,
+        },
+      });
+    } catch (error) {
+      logger.error("❌ Error debugging tenants:", error);
+      sendError(res, "DEBUG_ERROR", "Failed to debug tenants", 500);
+    }
+  }
+);
+
 // GET /api/v1/debug/order/:orderId - Debug order status and details
 router.get(
   "/order/:orderId",
@@ -80,7 +119,7 @@ router.get(
 
       logger.info(`📊 Order debug data:`, orderData);
 
-      sendSuccess(res, { 
+      sendSuccess(res, {
         order: orderData,
         debug: {
           orderStatus: order.status,
@@ -88,17 +127,18 @@ router.get(
           paymentMethod: order.payment_method,
           orderSource: order.orderSource,
           hasPaymentRecord: !!order.payment_intent_id,
-          isActive: order.status === 'active',
-          isClosed: order.status === 'closed',
-          isCancelled: order.status === 'cancelled',
-          isPaid: order.payment_status === 'paid',
-          isPendingPayment: order.payment_status === 'pending',
-          isQROrder: order.orderSource === 'QR_ORDERING',
-          isVisibleOnTable: order.status === 'active' && (
-            order.orderSource === 'QR_ORDERING' || 
-            (['WAITER', 'CASHIER'].includes(order.orderSource) && order.payment_status === 'pending')
-          )
-        }
+          isActive: order.status === "active",
+          isClosed: order.status === "closed",
+          isCancelled: order.status === "cancelled",
+          isPaid: order.payment_status === "paid",
+          isPendingPayment: order.payment_status === "pending",
+          isQROrder: order.orderSource === "QR_ORDERING",
+          isVisibleOnTable:
+            order.status === "active" &&
+            (order.orderSource === "QR_ORDERING" ||
+              (["WAITER", "CASHIER"].includes(order.orderSource) &&
+                order.payment_status === "pending")),
+        },
       });
     } catch (error) {
       logger.error("Debug order error:", error);
@@ -184,7 +224,9 @@ router.get(
       const { orderId } = req.params;
       const tenantId = getTenantId(req);
 
-      logger.info(`🔍 Debugging raw order data: ${orderId} for tenant: ${tenantId}`);
+      logger.info(
+        `🔍 Debugging raw order data: ${orderId} for tenant: ${tenantId}`
+      );
 
       // Get raw order data
       const orderResult = await executeQuery(
@@ -197,17 +239,17 @@ router.get(
       }
 
       const order = orderResult.rows[0];
-      
+
       // Get all column names
       const columnNames = Object.keys(order);
 
-      sendSuccess(res, { 
+      sendSuccess(res, {
         order: order,
         columnNames: columnNames,
-        hasPaymentStatus: 'paymentStatus' in order,
-        hasPaymentMethod: 'paymentMethod' in order,
+        hasPaymentStatus: "paymentStatus" in order,
+        hasPaymentMethod: "paymentMethod" in order,
         paymentStatusValue: order.paymentStatus,
-        paymentMethodValue: order.paymentMethod
+        paymentMethodValue: order.paymentMethod,
       });
     } catch (error) {
       logger.error("Debug raw order error:", error);

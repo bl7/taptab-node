@@ -13,6 +13,10 @@ router.get("/", async (req: Request, res: Response) => {
   try {
     const tenantId = await getPublicTenantId(req);
 
+    if (!tenantId) {
+      return sendError(res, "TENANT_NOT_FOUND", "Restaurant not found", 404);
+    }
+
     // Join with locations table to get location details
     const result = await executeQuery(
       `
@@ -76,7 +80,7 @@ router.get("/", async (req: Request, res: Response) => {
 });
 
 // Test route to check if parameter routes work
-router.get("/test", async (req: Request, res: Response) => {
+router.get("/test", async (_req: Request, res: Response) => {
   logger.info(`🔍 Test route hit`);
   sendSuccess(res, { message: "Test route works" });
 });
@@ -86,6 +90,11 @@ router.get("/:tableNumber", async (req: Request, res: Response) => {
   logger.info(`🔍 Route hit: /:tableNumber with params:`, req.params);
   try {
     const tenantId = await getPublicTenantId(req);
+
+    if (!tenantId) {
+      return sendError(res, "TENANT_NOT_FOUND", "Restaurant not found", 404);
+    }
+
     const { tableNumber } = req.params;
 
     // Validate table number
