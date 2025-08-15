@@ -584,99 +584,12 @@ router.patch(
 
       const item = await updateWithCheck("menuItems", id, updateData, tenantId);
 
-      // Get category name for response
-      const categoryNameResult = await executeQuery(
-        "SELECT name FROM categories WHERE id = $1",
-        [item.categoryId]
-      );
-
-      // Get ingredients for response
-      const ingredientsQuery = `
-        SELECT mii.*, i.name as ingredient_name, i.description as ingredient_description, 
-               i.unit as ingredient_unit, i.costPerUnit
-        FROM "menuItemIngredients" mii
-        JOIN ingredients i ON mii."ingredientId" = i.id
-        WHERE mii."menuItemId" = $1
-      `;
-      const ingredientsResult = await executeQuery(ingredientsQuery, [id]);
-      const menuItemIngredients = ingredientsResult.rows.map((ing: any) => ({
-        id: ing.id,
-        ingredientId: ing.ingredientId,
-        quantity: parseFloat((ing.quantity || 0).toString()),
-        unit: ing.unit,
-        ingredient: {
-          id: ing.ingredientId,
-          name: ing.ingredient_name,
-          description: ing.ingredient_description,
-          unit: ing.ingredient_unit,
-          costPerUnit: parseFloat((ing.costPerUnit || 0).toString()),
-        },
-      }));
-
-      // Get allergens for response
-      const allergensQuery = `
-        SELECT DISTINCT a.id, a.name, a.description, a.severity, a.isStandard,
-               ia."ingredientId", i.name as ingredient_name
-        FROM allergens a
-        JOIN "ingredientAllergens" ia ON a.id = ia."allergenId"
-        JOIN "menuItemIngredients" mii ON ia."ingredientId" = mii."ingredientId"
-        JOIN ingredients i ON ia."ingredientId" = i.id
-        WHERE mii."menuItemId" = $1
-        ORDER BY a.isStandard DESC, a.name ASC
-      `;
-      const allergensResult = await executeQuery(allergensQuery, [id]);
-
-      const allergenMap = new Map();
-      allergensResult.rows.forEach((allergen: any) => {
-        if (!allergenMap.has(allergen.id)) {
-          allergenMap.set(allergen.id, {
-            id: allergen.id,
-            name: allergen.name,
-            description: allergen.description,
-            severity: allergen.severity,
-            isStandard: allergen.isStandard,
-            sources: [],
-          });
-        }
-        allergenMap.get(allergen.id).sources.push({
-          ingredientId: allergen.ingredientId,
-          ingredientName: allergen.ingredient_name,
-        });
-      });
-      const allergens = Array.from(allergenMap.values());
-
-      // Get tags for response
-      const tagsQuery = `
-        SELECT mt.id, mt.name, mt.description, mt.color, mit.createdat as assignedAt
-        FROM "menuItemTags" mit
-        JOIN menuTags mt ON mit."tagId" = mt.id
-        WHERE mit."menuItemId" = $1 AND mt.isActive = true
-        ORDER BY mt.name ASC
-      `;
-      const tagsResult = await executeQuery(tagsQuery, [id]);
-      const menuItemTags = tagsResult.rows.map((tag: any) => ({
-        id: tag.id,
-        name: tag.name,
-        description: tag.description,
-        color: tag.color,
-        assignedAt: tag.assignedAt,
-      }));
-
-      const formattedItem = {
+      // Return only the essential data for availability toggle
+      const simpleResponse = {
         id: item.id,
         name: item.name,
-        description: item.description,
-        price: parseFloat((item.price || 0).toString()),
-        category: categoryNameResult.rows[0]?.name || "",
-        categoryId: item.categoryId,
-        image: item.image,
-        isActive: item.isActive,
         available: item.available,
-        createdAt: item.createdAt,
         updatedAt: item.updatedAt,
-        ingredients: menuItemIngredients,
-        allergens: allergens,
-        tags: menuItemTags,
       };
 
       logger.info(
@@ -684,7 +597,7 @@ router.patch(
       );
       sendSuccess(
         res,
-        { item: formattedItem },
+        { item: simpleResponse },
         `Menu item availability updated successfully - ${
           item.available ? "Available" : "Out of stock"
         }`
