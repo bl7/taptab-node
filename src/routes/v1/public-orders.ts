@@ -71,7 +71,7 @@ router.post("/", async (req: Request, res: Response) => {
     const orderData = {
       customerName: customerName || "Walk-in Customer",
       customerPhone: customerPhone || "",
-      tableNumber: table.id, // Store the table ID (UUID) in tableNumber column
+      tableNumber: table.number, // Store the actual table number
       tenantId,
       orderItems,
       orderSource: "QR_ORDERING",

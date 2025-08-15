@@ -90,6 +90,17 @@ router.post("/login", async (req, res) => {
       }
     );
 
+    // Log token creation details for debugging
+    const decodedToken = jwt.decode(accessToken) as any;
+    const tokenCreatedAt = new Date(decodedToken.iat * 1000);
+    const tokenExpiresAt = new Date(decodedToken.exp * 1000);
+
+    logger.info(`🔑 Access token created at: ${tokenCreatedAt.toISOString()}`);
+    logger.info(`⏰ Access token expires at: ${tokenExpiresAt.toISOString()}`);
+    logger.info(
+      `⏱️ Token lifetime: ${(decodedToken.exp - decodedToken.iat) / 3600} hours`
+    );
+
     // Generate refresh token (long-lived)
     const refreshTokenPayload = {
       id: user.id,
@@ -185,6 +196,21 @@ router.post("/verify", async (req, res) => {
 
     // Verify token
     const decoded = jwt.verify(token, process.env["JWT_SECRET"]!) as any;
+
+    // Log token verification details for debugging
+    const now = new Date();
+    const tokenCreatedAt = new Date(decoded.iat * 1000);
+    const tokenExpiresAt = new Date(decoded.exp * 1000);
+    const timeUntilExpiry = decoded.exp * 1000 - now.getTime();
+    const hoursUntilExpiry = timeUntilExpiry / (1000 * 60 * 60);
+
+    logger.info(`🔍 Token verification at: ${now.toISOString()}`);
+    logger.info(`🔑 Token created at: ${tokenCreatedAt.toISOString()}`);
+    logger.info(`⏰ Token expires at: ${tokenExpiresAt.toISOString()}`);
+    logger.info(`⏱️ Time until expiry: ${hoursUntilExpiry.toFixed(2)} hours`);
+    logger.info(
+      `✅ Token is valid for user: ${decoded.email} (${decoded.role})`
+    );
 
     // Check if it's an access token
     if (decoded.type !== "access") {
@@ -405,6 +431,70 @@ router.post("/logout", async (req, res) => {
       "An error occurred during logout",
       500
     );
+  }
+});
+
+// Debug endpoint to check token details
+router.post("/debug-token", async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return sendError(res, "TOKEN_REQUIRED", "Token is required", 400);
+    }
+
+    // Decode token without verification (for debugging)
+    const decoded = jwt.decode(token) as any;
+
+    if (!decoded) {
+      return sendError(res, "INVALID_TOKEN", "Could not decode token", 400);
+    }
+
+    const now = new Date();
+    const tokenCreatedAt = new Date(decoded.iat * 1000);
+    const tokenExpiresAt = new Date(decoded.exp * 1000);
+    const timeUntilExpiry = decoded.exp * 1000 - now.getTime();
+    const hoursUntilExpiry = timeUntilExpiry / (1000 * 60 * 60);
+    const isExpired = timeUntilExpiry < 0;
+
+    const debugInfo = {
+      tokenInfo: {
+        id: decoded.id,
+        email: decoded.email,
+        role: decoded.role,
+        tenantId: decoded.tenantId,
+        type: decoded.type,
+        iat: decoded.iat,
+        exp: decoded.exp,
+      },
+      timing: {
+        currentTime: now.toISOString(),
+        tokenCreatedAt: tokenCreatedAt.toISOString(),
+        tokenExpiresAt: tokenExpiresAt.toISOString(),
+        timeUntilExpiry: `${hoursUntilExpiry.toFixed(2)} hours`,
+        isExpired: isExpired,
+        serverTime: new Date().toISOString(),
+      },
+      analysis: {
+        totalLifetime: `${((decoded.exp - decoded.iat) / 3600).toFixed(
+          2
+        )} hours`,
+        remainingLifetime: `${Math.max(0, hoursUntilExpiry).toFixed(2)} hours`,
+        percentageUsed: `${(
+          ((now.getTime() - decoded.iat * 1000) /
+            (decoded.exp * 1000 - decoded.iat * 1000)) *
+          100
+        ).toFixed(2)}%`,
+      },
+    };
+
+    logger.info(`🔍 Token debug requested for user: ${decoded.email}`);
+    logger.info(`📊 Debug info:`, debugInfo);
+
+    sendSuccess(res, debugInfo, "Token debug information");
+  } catch (error) {
+    logger.error("Token debug error:", error);
+    sendError(res, "DEBUG_ERROR", "Failed to debug token");
   }
 });
 
