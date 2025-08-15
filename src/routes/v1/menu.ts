@@ -554,7 +554,7 @@ router.delete(
 router.patch(
   "/items/:id/availability",
   authenticateToken,
-  requireRole(["TENANT_ADMIN", "MANAGER"]),
+  requireRole(["TENANT_ADMIN", "MANAGER", "KITCHEN"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
