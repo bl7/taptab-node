@@ -86,7 +86,7 @@ router.post("/login", async (req, res) => {
       accessTokenPayload,
       process.env["JWT_SECRET"]!,
       {
-        expiresIn: "15m", // Access token expires in 15 minutes
+        expiresIn: "8h", // Access token expires in 8 hours (typical shift length)
       }
     );
 
@@ -326,7 +326,7 @@ router.post("/refresh", async (req, res) => {
       accessTokenPayload,
       process.env["JWT_SECRET"]!,
       {
-        expiresIn: "15m", // Access token expires in 15 minutes
+        expiresIn: "8h", // Access token expires in 8 hours (typical shift length)
       }
     );
 

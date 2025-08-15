@@ -12,6 +12,7 @@ import {
   findMany,
 } from "../../utils/database";
 import { DatabaseError } from "pg";
+import { socketManager } from "../../utils/socket";
 
 const router = Router();
 
@@ -595,11 +596,20 @@ router.patch(
       logger.info(
         `Menu item availability updated: ${item.name} - Available: ${item.available}`
       );
+
+      // Emit WebSocket notification for real-time availability updates
+      socketManager.emitMenuItemAvailabilityUpdate(
+        tenantId,
+        item.id,
+        item.available,
+        item.name
+      );
+
       sendSuccess(
         res,
         { item: simpleResponse },
         `Menu item availability updated successfully - ${
-          item.available ? "Available" : "Out of stock"
+          item.available ? "Available" : "Out of Stock"
         }`
       );
     } catch (error) {

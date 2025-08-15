@@ -58,6 +58,19 @@ class SocketManager {
             );
           }
 
+          // Join staff room for availability updates (everyone EXCEPT kitchen staff)
+          if (
+            userInfo.userRole === "TENANT_ADMIN" ||
+            userInfo.userRole === "MANAGER" ||
+            userInfo.userRole === "WAITER" ||
+            userInfo.userRole === "CASHIER"
+          ) {
+            socket.join(`staff_${userInfo.tenantId}`);
+            logger.info(
+              `User ${userInfo.userId} (${userInfo.userRole}) joined staff room for tenant ${userInfo.tenantId}`
+            );
+          }
+
           socket.emit("authenticated", { success: true });
           logger.info(
             `Socket ${socket.id} authenticated as ${userInfo.userRole}`
@@ -183,6 +196,43 @@ class SocketManager {
     logger.info(`Modification type: ${changes.modificationType}`);
     logger.info(`Modified by: ${changes.modifiedBy}`);
     logger.info(`Notification data:`, notificationData);
+  }
+
+  // Emit menu item availability update to relevant staff only
+  emitMenuItemAvailabilityUpdate(
+    tenantId: string,
+    itemId: string,
+    available: boolean,
+    itemName: string
+  ) {
+    if (!this.io) {
+      logger.error("Socket.IO not initialized");
+      return;
+    }
+
+    const notificationData = {
+      type: "MENU_ITEM_AVAILABILITY_UPDATE",
+      title: `Menu Item ${available ? "Available" : "Out of Stock"}`,
+      payload: {
+        itemId,
+        available,
+        itemName,
+        tenantId,
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    // Emit to staff roles only (not customers)
+    this.io
+      .to(`tenant_${tenantId}`)
+      .to(`staff_${tenantId}`)
+      .emit("menuItemAvailabilityUpdate", notificationData);
+
+    logger.info(
+      `📡 Menu item availability update emitted: ${itemName} - ${
+        available ? "Available" : "Out of Stock"
+      }`
+    );
   }
 
   // Get connected users for debugging
