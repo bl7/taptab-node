@@ -1,12 +1,18 @@
 // Helper functions for formatting order data consistently across all order operations
+import { executeQuery } from "../../../../utils/database";
+import { logger } from "../../../../utils/logger";
 
 export function formatOrderFromRows(orderRows: any[]): any {
   if (orderRows.length === 0) return null;
 
   const firstRow = orderRows[0];
 
+  // Extract sequential number from orderNumber (e.g., "160825-001" -> "001")
+  const sequentialNumber = extractSequentialNumber(firstRow.orderNumber);
+
   return {
     id: firstRow.id,
+    orderNumber: sequentialNumber, // Replace with just the sequential number
     tableId: firstRow.tableNumber,
     tableNumber: firstRow.tableNumber,
     items: orderRows
@@ -70,6 +76,7 @@ export function formatOrdersFromRows(rows: any[]): any[] {
     if (!ordersMap.has(row.id)) {
       ordersMap.set(row.id, {
         id: row.id,
+        orderNumber: extractSequentialNumber(row.orderNumber), // Replace with just the sequential number
         tableId: row.tableNumber,
         tableNumber: row.tableNumber,
         items: [],
@@ -150,6 +157,77 @@ export function generateOrderNumber(): string {
   return `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
 }
 
+/**
+ * Generate a sequential daily order number
+ * Format: DDMMYY-XXX where XXX is the sequential number for the day
+ * @param tenantId - The tenant ID to scope the daily sequence
+ * @returns Promise<string> - The generated order number
+ */
+export async function generateSequentialOrderNumber(
+  tenantId: string
+): Promise<string> {
+  try {
+    const today = new Date();
+    const dateString = today
+      .toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "2-digit",
+      })
+      .replace(/\//g, ""); // Format: DDMMYY
+
+    // Get the highest order number for today for this tenant
+    const query = `
+      SELECT "orderNumber" 
+      FROM orders 
+      WHERE "tenantId" = $1 
+        AND DATE("createdAt") = DATE($2)
+        AND "orderNumber" ~ '^${dateString}-[0-9]+$'
+      ORDER BY CAST(SUBSTRING("orderNumber" FROM '^${dateString}-([0-9]+)$') AS INTEGER) DESC
+      LIMIT 1
+    `;
+
+    const result = await executeQuery(query, [tenantId, today]);
+
+    let nextNumber = 1;
+    if (result.rows.length > 0) {
+      const lastOrderNumber = result.rows[0].orderNumber;
+      const match = lastOrderNumber.match(
+        new RegExp(`^${dateString}-([0-9]+)$`)
+      );
+      if (match) {
+        nextNumber = parseInt(match[1]) + 1;
+      }
+    }
+
+    // Format: DDMMYY-XXX (e.g., 151224-001, 151224-002)
+    const formattedNumber = nextNumber.toString().padStart(3, "0");
+    return `${dateString}-${formattedNumber}`;
+  } catch (error) {
+    // Fallback to timestamp-based if there's an error
+    logger.error("Error generating sequential order number:", error);
+    return `ORD-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+  }
+}
+
 export function generateItemId(): string {
   return `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+}
+
+/**
+ * Extract sequential number from orderNumber
+ * @param orderNumber - Full order number (e.g., "160825-001", "ORD-1234567890")
+ * @returns string - Sequential number (e.g., "001") or original if not in new format
+ */
+export function extractSequentialNumber(orderNumber: string): string {
+  if (!orderNumber) return orderNumber;
+
+  // Check if it's in the new format: DDMMYY-XXX
+  const newFormatMatch = orderNumber.match(/^\d{6}-(\d{3})$/);
+  if (newFormatMatch && newFormatMatch[1]) {
+    return newFormatMatch[1]; // Return just the sequential part (e.g., "001")
+  }
+
+  // For old format orders, return the original orderNumber
+  return orderNumber;
 }

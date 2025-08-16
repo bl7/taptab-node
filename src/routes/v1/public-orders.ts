@@ -4,6 +4,7 @@ import { getPublicTenantId } from "../../middleware/tenant";
 import { sendSuccess, sendError } from "../../utils/response";
 import { executeQuery } from "../../utils/database";
 import { OrderService } from "../../services/OrderService";
+import { formatOrderFromRows } from "./orders/helpers/order-formatters";
 
 const router = Router();
 
@@ -139,30 +140,7 @@ router.get("/:orderId", async (req: Request, res: Response) => {
       return sendError(res, "ORDER_NOT_FOUND", "Order not found", 404);
     }
 
-    const orderRows = orderResult.rows;
-    const formattedOrder = {
-      id: orderRows[0].id,
-      orderNumber: orderRows[0].orderNumber,
-      tableId: orderRows[0].tableId,
-      totalAmount: parseFloat(orderRows[0].totalAmount.toString()),
-      finalAmount: parseFloat(orderRows[0].finalAmount.toString()),
-      status: orderRows[0].status,
-      customerName: orderRows[0].customerName,
-      customerPhone: orderRows[0].customerPhone,
-      items: orderRows
-        .filter((row) => row.item_id)
-        .map((row) => ({
-          id: row.item_id,
-          menuItemId: row.menuItemId,
-          menuItemName: row.menu_item_name,
-          quantity: row.quantity,
-          price: parseFloat(row.unitPrice.toString()),
-          total: parseFloat(row.totalPrice.toString()),
-          notes: row.notes,
-        })),
-      createdAt: orderRows[0].createdAt,
-      updatedAt: orderRows[0].updatedAt,
-    };
+    const formattedOrder = formatOrderFromRows(orderResult.rows);
 
     sendSuccess(res, { order: formattedOrder });
   } catch (error) {

@@ -8,7 +8,7 @@ import {
   formatOrderFromRows,
   formatOrdersFromRows,
   generateOrderId,
-  generateOrderNumber,
+  generateSequentialOrderNumber,
   generateItemId,
   getOrderWithItemsQuery,
 } from "./helpers/order-formatters";
@@ -367,8 +367,8 @@ router.post(
         });
       }
 
-      // Generate order number
-      const orderNumber = generateOrderNumber();
+      // Generate sequential daily order number
+      const orderNumber = await generateSequentialOrderNumber(tenantId);
 
       // Determine order source
       let finalOrderSource = mapOrderSource(orderSource || "WAITER");

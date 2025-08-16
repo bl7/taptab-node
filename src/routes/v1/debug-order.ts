@@ -4,6 +4,7 @@ import { getTenantId } from "../../middleware/tenant";
 import { authenticateToken, requireRole } from "../../middleware/auth";
 import { sendSuccess, sendError } from "../../utils/response";
 import { executeQuery } from "../../utils/database";
+import { extractSequentialNumber } from "./orders/helpers/order-formatters";
 
 const router = Router();
 
@@ -92,7 +93,7 @@ router.get(
 
       const orderData = {
         id: order.id,
-        orderNumber: order.orderNumber,
+        orderNumber: extractSequentialNumber(order.orderNumber),
         tableNumber: order.tableNumber,
         status: order.status,
         paymentStatus: order.payment_status,
@@ -179,7 +180,7 @@ router.get(
 
       const orders = ordersResult.rows.map((order) => ({
         id: order.id,
-        orderNumber: order.orderNumber,
+        orderNumber: extractSequentialNumber(order.orderNumber),
         status: order.status,
         paymentStatus: order.payment_status,
         paymentMethod: order.payment_method,

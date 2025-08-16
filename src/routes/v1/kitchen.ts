@@ -4,6 +4,10 @@ import { getTenantId } from "../../middleware/tenant";
 import { executeQuery } from "../../utils/database";
 import { sendSuccess, sendError } from "../../utils/response";
 import { logger } from "../../utils/logger";
+import {
+  formatOrderFromRows,
+  extractSequentialNumber,
+} from "./orders/helpers/order-formatters";
 
 const router = express.Router();
 
@@ -41,20 +45,24 @@ router.get(
 
       const ordersResult = await executeQuery(query, queryParams);
 
-      const formattedOrders = ordersResult.rows.map((order: any) => ({
-        id: order.id,
-        orderNumber: order.orderNumber,
-        tableNumber: order.tableNumber,
-        orderStatus: order.order_status,
-        customerName: order.customerName,
-        customerPhone: order.customerPhone,
-        createdAt: order.createdAt,
-        itemCounts: {
-          total: parseInt(order.total_items),
-          pending: parseInt(order.pending_items),
-          cooked: parseInt(order.cooked_items),
-        },
-      }));
+      // Use the formatter to get sequential numbers
+      const formattedOrders = ordersResult.rows.map((order: any) => {
+        const formattedOrder = formatOrderFromRows([order]);
+        return {
+          id: order.id,
+          orderNumber: formattedOrder?.orderNumber || order.orderNumber, // Use formatted sequential number
+          tableNumber: order.tableNumber,
+          orderStatus: order.order_status,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          createdAt: order.createdAt,
+          itemCounts: {
+            total: parseInt(order.total_items),
+            pending: parseInt(order.pending_items),
+            cooked: parseInt(order.cooked_items),
+          },
+        };
+      });
 
       logger.info(`Kitchen retrieved ${formattedOrders.length} active orders`);
       sendSuccess(
@@ -114,9 +122,11 @@ router.get(
         [orderId]
       );
 
+      // Use the formatter to get sequential numbers
+      const formattedOrderData = formatOrderFromRows([order]);
       const formattedOrder = {
         id: order.id,
-        orderNumber: order.orderNumber,
+        orderNumber: formattedOrderData?.orderNumber || order.orderNumber, // Use formatted sequential number
         tableNumber: order.tableNumber,
         status: order.status,
         customerName: order.customerName,
@@ -330,7 +340,7 @@ router.get(
         },
         recentOrders: recentOrdersResult.rows.map((order: any) => ({
           id: order.id,
-          orderNumber: order.orderNumber,
+          orderNumber: extractSequentialNumber(order.orderNumber),
           tableNumber: order.tableNumber,
           createdAt: order.createdAt,
           pendingCount: parseInt(order.pending_count),

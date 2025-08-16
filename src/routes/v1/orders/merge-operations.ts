@@ -4,6 +4,7 @@ import { getTenantId } from "../../../middleware/tenant";
 import { authenticateToken, requireRole } from "../../../middleware/auth";
 import { sendSuccess, sendError } from "../../../utils/response";
 import { executeQuery } from "../../../utils/database";
+import { generateSequentialOrderNumber } from "./helpers/order-formatters";
 
 const router = Router();
 
@@ -275,7 +276,7 @@ router.post(
 
         const newOrderData = {
           id: mergedOrderId,
-          orderNumber: `MERGED-${Date.now()}`,
+          orderNumber: await generateSequentialOrderNumber(tenantId),
           customerName:
             customerName ||
             sourceOrders

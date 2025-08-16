@@ -3,6 +3,7 @@ import { logger } from "../utils/logger";
 import {
   formatOrderFromRows,
   getOrderWithItemsQuery,
+  generateSequentialOrderNumber,
 } from "../routes/v1/orders/helpers/order-formatters";
 
 export interface CreateOrderData {
@@ -83,6 +84,10 @@ export class OrderService {
     );
     const finalAmount = subtotal + taxAmount - discountAmount;
 
+    // Generate sequential daily order number
+    const orderNumber = await generateSequentialOrderNumber(tenantId);
+    const now = new Date();
+
     // Create order
     const orderQuery = `
       INSERT INTO orders (
@@ -94,9 +99,6 @@ export class OrderService {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
       RETURNING *
     `;
-
-    const orderNumber = `ORD-${Date.now()}`;
-    const now = new Date();
 
     await executeQuery(orderQuery, [
       orderId,

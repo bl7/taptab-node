@@ -7,6 +7,7 @@ import { executeQuery } from "../../../utils/database";
 import {
   formatOrderFromRows,
   generateOrderId,
+  generateSequentialOrderNumber,
   generateItemId,
 } from "./helpers/order-formatters";
 import {
@@ -140,7 +141,7 @@ router.post(
 
       // Create new order
       const newOrderId = generateOrderId().replace("order_", "order_split_");
-      const newOrderNumber = `SPLIT-${Date.now()}`;
+      const newOrderNumber = await generateSequentialOrderNumber(tenantId);
 
       const newOrderData = {
         id: newOrderId,

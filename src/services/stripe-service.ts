@@ -2,6 +2,7 @@ import Stripe from "stripe";
 import { logger } from "../utils/logger";
 import { executeQuery } from "../utils/database";
 import { socketManager } from "../utils/socket";
+import { extractSequentialNumber } from "../routes/v1/orders/helpers/order-formatters";
 
 // Helper function to format order with items
 export function formatOrderWithItems(rows: any[]) {
@@ -25,7 +26,7 @@ export function formatOrderWithItems(rows: any[]) {
 
   return {
     id: firstRow.id,
-    orderNumber: firstRow.orderNumber,
+    orderNumber: extractSequentialNumber(firstRow.orderNumber),
     tableNumber: firstRow.tableNumber,
     totalAmount: firstRow.totalAmount
       ? parseFloat(firstRow.totalAmount.toString())
