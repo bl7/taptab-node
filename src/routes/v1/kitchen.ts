@@ -15,7 +15,7 @@ const router = express.Router();
 router.get(
   "/orders",
   authenticateToken,
-  requireRole(["KITCHEN", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["KITCHEN", "MANAGER", "TENANT_ADMIN", "WAITER", "CASHIER"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -81,7 +81,7 @@ router.get(
 router.get(
   "/orders/:orderId",
   authenticateToken,
-  requireRole(["KITCHEN", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["KITCHEN", "MANAGER", "TENANT_ADMIN", "WAITER", "CASHIER"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -169,7 +169,7 @@ router.get(
 router.put(
   "/orders/:orderId/items/:itemId/status",
   authenticateToken,
-  requireRole(["KITCHEN", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["KITCHEN", "MANAGER", "TENANT_ADMIN", "WAITER", "CASHIER"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);
@@ -299,7 +299,7 @@ router.put(
 router.get(
   "/dashboard",
   authenticateToken,
-  requireRole(["KITCHEN", "MANAGER", "TENANT_ADMIN"]),
+  requireRole(["KITCHEN", "MANAGER", "TENANT_ADMIN", "WAITER", "CASHIER"]),
   async (req: Request, res: Response) => {
     try {
       const tenantId = getTenantId(req);

@@ -159,6 +159,14 @@ This query:
 
 The `sequentialNumber` field is now available in **ALL** order-related GET endpoints:
 
+### Role Permissions Fixed
+
+**Kitchen Routes** are now accessible to **WAITER** and **CASHIER** roles:
+
+- ✅ **Before**: Only KITCHEN, MANAGER, TENANT_ADMIN could access kitchen routes
+- ✅ **After**: WAITER, CASHIER, KITCHEN, MANAGER, TENANT_ADMIN can all access kitchen routes
+- ✅ **Reason**: Waiters and cashiers need to view order status and update item statuses
+
 #### ✅ **Core Order Endpoints**
 
 - `GET /api/orders` - Get all orders
@@ -171,8 +179,10 @@ The `sequentialNumber` field is now available in **ALL** order-related GET endpo
 
 #### ✅ **Kitchen Endpoints**
 
-- `GET /api/v1/kitchen/orders` - Kitchen orders list
-- `GET /api/v1/kitchen/orders/:orderId` - Kitchen order details
+- `GET /api/v1/kitchen/orders` - Kitchen orders list (accessible to WAITER, CASHIER, KITCHEN, MANAGER, TENANT_ADMIN)
+- `GET /api/v1/kitchen/orders/:orderId` - Kitchen order details (accessible to WAITER, CASHIER, KITCHEN, MANAGER, TENANT_ADMIN)
+- `GET /api/v1/kitchen/dashboard` - Kitchen dashboard (accessible to WAITER, CASHIER, KITCHEN, MANAGER, TENANT_ADMIN)
+- `PUT /api/v1/kitchen/orders/:orderId/items/:itemId/status` - Update item status (accessible to WAITER, CASHIER, KITCHEN, MANAGER, TENANT_ADMIN)
 
 #### ✅ **Other Endpoints**
 
